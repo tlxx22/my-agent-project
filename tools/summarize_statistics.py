@@ -5,7 +5,7 @@
 import pandas as pd
 from typing import Dict, List
 import logging
-from tools.classify_instrument_type import classify_instrument_type, batch_classify_instruments
+from tools.classify_instrument_type import classify_instrument_type
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +51,18 @@ def summarize_statistics(df: pd.DataFrame, use_llm_classification: bool = True) 
             context_parts.append(f"备注: {first_row['备注']}")
         unique_contexts.append("; ".join(context_parts))
     
-    # 批量分类唯一型号
-    unique_classifications = batch_classify_instruments(
-        unique_models.tolist(), 
-        unique_contexts, 
-        use_llm=use_llm_classification
-    )
+    # 逐个分类唯一型号
+    unique_classifications = []
+    for model, context in zip(unique_models, unique_contexts):
+        classification = classify_instrument_type(
+            model=model,
+            spec="",
+            context=context,
+            row_index=-1,  # 不使用表格位置信息
+            table_categories=None,  # 统计阶段不使用表格分类
+            use_llm=use_llm_classification
+        )
+        unique_classifications.append(classification)
     
     # 创建型号到分类的映射
     model_to_type = dict(zip(unique_models, unique_classifications))

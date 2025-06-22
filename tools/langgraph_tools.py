@@ -10,7 +10,7 @@ import logging
 # 导入原有功能模块
 from .extract_excel_tables import extract_excel_tables as _extract_excel_tables
 from .parse_instrument_table import extract_instrument_info as _extract_instrument_info, validate_parsed_data
-from .classify_instrument_type import batch_classify_instruments as _batch_classify_instruments
+from .classify_instrument_type import classify_instrument_type
 from .summarize_statistics import summarize_statistics as _summarize_statistics, generate_summary_report, get_summary_statistics
 from .match_standard_clause import StandardClauseRetriever
 from .generate_installation_recommendation import InstallationRecommendationGenerator
@@ -126,11 +126,12 @@ def parse_instrument_table(table_data: Dict) -> Dict[str, Any]:
 @tool
 def classify_instrument_types(parsed_data: Dict, use_llm: bool = True) -> Dict[str, Any]:
     """
-    对仪表进行类型分类
+    补充仪表分类（仅对未分类的仪表进行LLM分类）
+    注意：parse_instrument_table已经完成了基于表格分类的工作
     
     Args:
-        parsed_data: 解析后的数据字典
-        use_llm: 是否使用LLM进行分类
+        parsed_data: 解析后的数据字典（应该已经包含'仪表类型'列）
+        use_llm: 是否使用LLM对未分类项进行分类
     
     Returns:
         分类结果字典：{"success": bool, "classified_data": Dict, "message": str}
@@ -142,23 +143,52 @@ def classify_instrument_types(parsed_data: Dict, use_llm: bool = True) -> Dict[s
         # 重建DataFrame
         df = pd.DataFrame(parsed_data["data"])
         
-        # 提取型号和上下文
-        models = df['型号'].tolist()
-        contexts = []
+        # 检查是否已经有分类结果
+        if '仪表类型' not in df.columns:
+            logger.warning("解析数据中缺少'仪表类型'列，parse_instrument_table可能未正确执行")
+            df['仪表类型'] = "未分类"
         
-        for _, row in df.iterrows():
-            context_parts = []
-            if '规格' in df.columns and str(row['规格']).strip():
-                context_parts.append(f"规格: {row['规格']}")
-            if '备注' in df.columns and str(row['备注']).strip():
-                context_parts.append(f"备注: {row['备注']}")
-            contexts.append("; ".join(context_parts))
+        # 统计分类情况
+        classified_count = len(df[df['仪表类型'] != "未分类"])
+        unclassified_count = len(df[df['仪表类型'] == "未分类"])
         
-        # 进行分类
-        instrument_types = _batch_classify_instruments(models, contexts, use_llm=use_llm)
+        logger.info(f"分类状态: 已分类 {classified_count} 个，未分类 {unclassified_count} 个")
         
-        # 添加分类结果
-        df['仪表类型'] = instrument_types
+        # 只对未分类的仪表使用LLM分类
+        if unclassified_count > 0 and use_llm:
+            logger.info(f"使用LLM对 {unclassified_count} 个未分类仪表进行分类...")
+            
+            unclassified_mask = df['仪表类型'] == "未分类"
+            unclassified_df = df[unclassified_mask].copy()
+            
+            # 准备LLM分类的数据
+            models = unclassified_df['型号'].tolist()
+            specs = unclassified_df.get('规格', [''] * len(models)).tolist()
+            contexts = unclassified_df.get('备注', [''] * len(models)).tolist()
+            
+            # 使用LLM逐个分类
+            llm_classifications = []
+            for model, spec, context in zip(models, specs, contexts):
+                classification = classify_instrument_type(
+                    model=model,
+                    spec=spec,
+                    context=context,
+                    row_index=-1,  # 不使用表格位置信息
+                    table_categories=None,  # 表格分类已经在parse阶段完成
+                    use_llm=True
+                )
+                llm_classifications.append(classification)
+            
+            # 更新未分类项的分类结果
+            df.loc[unclassified_mask, '仪表类型'] = llm_classifications
+            
+            # 统计LLM分类的效果
+            newly_classified = len([c for c in llm_classifications if c != "无法识别"])
+            logger.info(f"LLM成功分类了 {newly_classified} 个仪表")
+        
+        # 最终统计
+        final_classified = len(df[~df['仪表类型'].isin(["未分类", "无法识别"])])
+        final_unclassified = len(df[df['仪表类型'].isin(["未分类", "无法识别"])])
         
         # 转换为字典格式
         classified_data = {
@@ -167,18 +197,23 @@ def classify_instrument_types(parsed_data: Dict, use_llm: bool = True) -> Dict[s
             "row_count": len(df)
         }
         
+        message = f"分类完成: 表格分类 {classified_count} 个"
+        if unclassified_count > 0 and use_llm:
+            message += f", LLM补充分类 {newly_classified} 个"
+        message += f", 最终已分类 {final_classified} 个, 未分类 {final_unclassified} 个"
+        
         return {
             "success": True,
             "classified_data": classified_data,
-            "message": f"成功分类 {len(df)} 个仪表"
+            "message": message
         }
         
     except Exception as e:
-        logger.error(f"分类仪表类型失败: {str(e)}")
+        logger.error(f"补充分类仪表类型失败: {str(e)}")
         return {
             "success": False,
             "classified_data": None,
-            "message": f"分类仪表类型失败: {str(e)}"
+            "message": f"补充分类仪表类型失败: {str(e)}"
         }
 
 @tool
