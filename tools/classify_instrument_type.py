@@ -271,6 +271,56 @@ def batch_classify_from_table(
     
     return results, categories
 
+def batch_classify_instruments(
+    models: List[str], 
+    specs: List[str] = None,
+    table_categories: List[str] = None, 
+    use_llm: bool = True
+) -> List[str]:
+    """
+    批量分类仪表
+    
+    Args:
+        models: 仪表型号列表
+        specs: 规格信息列表（可选）
+        table_categories: 表格中的分类信息列表（可选）
+        use_llm: 是否使用LLM分类
+    
+    Returns:
+        分类结果列表
+    """
+    if not models:
+        return []
+    
+    specs = specs or [""] * len(models)
+    table_categories = table_categories or [""] * len(models)
+    
+    # 确保所有列表长度一致
+    max_len = max(len(models), len(specs), len(table_categories))
+    while len(specs) < max_len:
+        specs.append("")
+    while len(table_categories) < max_len:
+        table_categories.append("")
+    
+    results = []
+    for i, model in enumerate(models):
+        # 优先使用表格分类
+        if i < len(table_categories) and table_categories[i] and table_categories[i].strip():
+            result = table_categories[i].strip()
+            logger.info(f"使用表格分类: {model} -> {result}")
+        else:
+            # 使用标准分类逻辑
+            spec = specs[i] if i < len(specs) else ""
+            result = classify_instrument_type(
+                model=model,
+                spec=spec,
+                use_llm=use_llm
+            )
+        
+        results.append(result)
+    
+    return results
+
 if __name__ == "__main__":
     # 测试代码
     logging.basicConfig(level=logging.INFO)

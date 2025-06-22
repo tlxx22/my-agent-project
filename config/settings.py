@@ -18,7 +18,7 @@ LANGCHAIN_ENDPOINT = os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchai
 
 # 模型配置
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "shibing624/text2vec-base-chinese")
 
 # 向量数据库配置
 FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "./data/indexes/instrument_standards.index")

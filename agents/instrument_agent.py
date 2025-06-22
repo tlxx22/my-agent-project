@@ -330,14 +330,14 @@ def advance_task_index(state: InstrumentAgentState) -> InstrumentAgentState:
         state["needs_file_processing"] = False  # 确保不再需要文件处理
         print(f"✅ 已设置: user_intent=finish, needs_file_processing=false")
         return state
-    
+        
     # 设置下一个任务
     next_task = planned_tasks[new_index]
     task_type = next_task.get("type", "")
     task_target = next_task.get("target", "")
-    
+            
     print(f"📋 准备执行下一个任务: {new_index + 1}/{total_tasks} - {task_type} ({task_target})")
-    
+            
     # 简化任务设置逻辑
     if task_type == "parse":
         state["needs_file_processing"] = True
@@ -1015,13 +1015,26 @@ def match_standard_clause_node(state: InstrumentAgentState) -> InstrumentAgentSt
         
         for i, inst_type in enumerate(instrument_types, 1):
             try:
-                print(f"🔍 匹配标准 {i}/{len(instrument_types)}: {inst_type}")
+                print(f"\n🔍 匹配标准 {i}/{len(instrument_types)}: {inst_type}")
                 from tools.match_standard_clause import match_standard_clause
                 standards = match_standard_clause(inst_type, query_type="installation", top_k=3)
                 print(f"   ✅ 找到 {len(standards)} 条标准")
+                
+                # 打印每条标准的详细内容
+                for j, std in enumerate(standards, 1):
+                    print(f"   📋 标准 {j}: {std[:100]}..." if len(std) > 100 else f"   📋 标准 {j}: {std}")
+                
+                # 检查并添加到总列表（带去重）
+                added_count = 0
                 for std in standards:
                     if std not in all_standards:
                         all_standards.append(std)
+                        added_count += 1
+                    else:
+                        print(f"   ⚠️ 跳过重复标准: {std[:50]}...")
+                
+                print(f"   ➕ 新增 {added_count} 条标准到总列表")
+                
             except Exception as e:
                 print(f"   ⚠️ 匹配失败: {str(e)}")
                 logger.warning(f"为类型 {inst_type} 匹配标准失败: {str(e)}")
@@ -1589,7 +1602,7 @@ def create_instrument_agent():
     })
     
     # 标准匹配后的错误检查
-    builder.add_conditional_edges("match_standard_clause", 
+    builder.add_conditional_edges("match_standard_clause",
         lambda s: error_check_gateway(s, "standards_gateway"),
         {
             "standards_gateway": "standards_gateway",
@@ -1600,7 +1613,7 @@ def create_instrument_agent():
     builder.add_conditional_edges("standards_gateway", standards_gateway, {
         "yes": "ask_user_approval",
         "no": "respond_stats_with_note"
-    })
+        })
     
     # 用户授权网关
     builder.add_conditional_edges("ask_user_approval", approval_gateway, {

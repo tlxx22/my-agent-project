@@ -10,7 +10,9 @@ import numpy as np
 import faiss
 from sentence_transformers import SentenceTransformer
 from tools.build_index import DocumentIndexer
-from config.settings import FAISS_INDEX_PATH
+
+# 配置常量
+FAISS_INDEX_PATH = "./data/indexes/instrument_standards.index"
 
 logger = logging.getLogger(__name__)
 

@@ -60,8 +60,8 @@ def summarize_statistics(df: pd.DataFrame, use_llm_classification: bool = True) 
             context=context,
             row_index=-1,  # 不使用表格位置信息
             table_categories=None,  # 统计阶段不使用表格分类
-            use_llm=use_llm_classification
-        )
+        use_llm=use_llm_classification
+    )
         unique_classifications.append(classification)
     
     # 创建型号到分类的映射

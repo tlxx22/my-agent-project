@@ -12,16 +12,13 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
+# 配置常量
+FAISS_INDEX_PATH = "./data/indexes/instrument_standards.index"
+
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-try:
-    from config.settings import FAISS_INDEX_PATH, VECTOR_DIMENSION, EMBEDDING_MODEL
-except ImportError:
-    # 如果无法导入配置，使用默认值
-    FAISS_INDEX_PATH = "data/indexes/instrument_standards.index"
-    VECTOR_DIMENSION = 384
-    EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+# 配置项现在由DocumentIndexer类内部管理
 
 logger = logging.getLogger(__name__)
 
@@ -30,18 +27,18 @@ class DocumentIndexer:
     
     def __init__(self, model_name: str = None, dimension: int = None):
         """
-        初始化索引构建器
+        初始化文档索引器
         
         Args:
-            model_name: 嵌入模型名称
-            dimension: 向量维度
+            model_name: 嵌入模型名称，默认使用中文优化模型
+            dimension: 向量维度（自动从模型获取）
         """
-        self.model_name = model_name or "all-MiniLM-L6-v2"  # 使用轻量级的多语言模型
-        self.dimension = dimension or VECTOR_DIMENSION
+        # 使用对中文支持更好的embedding模型
+        self.model_name = model_name or "shibing624/text2vec-base-chinese"
         self.model = None
         self.index = None
-        self.documents = []  # 存储原始文档内容
-        self.metadata = []   # 存储文档元数据
+        self.documents = []
+        self.metadata = []
         
     def _load_model(self):
         """加载嵌入模型"""
@@ -93,14 +90,14 @@ class DocumentIndexer:
                     except Exception as e:
                         logger.warning(f"提取第{page_num+1}页文本时出错: {str(e)}")
                         continue
-            
+                
             # 如果PyPDF2提取效果不好，尝试其他方法
             if len(text_chunks) < 5:  # 如果提取的文本块太少
                 logger.warning(f"PyPDF2提取效果不佳，尝试其他方法...")
                 text_chunks = self._try_alternative_pdf_extraction(pdf_path)
-            
-            logger.info(f"从PDF文件 {pdf_path} 提取了 {len(text_chunks)} 个文本块")
-            return text_chunks
+                
+                logger.info(f"从PDF文件 {pdf_path} 提取了 {len(text_chunks)} 个文本块")
+                return text_chunks
                 
         except Exception as e:
             logger.error(f"读取PDF文件失败: {str(e)}")
@@ -156,43 +153,129 @@ class DocumentIndexer:
         
         return text_chunks
     
-    def extract_text_from_txt(self, txt_path: str, encoding: str = 'utf-8') -> List[str]:
-        """
-        从文本文件中提取文本
+    def extract_text_from_txt(self, file_path: str) -> List[str]:
+        """从TXT文件中提取文本块"""
+        text_chunks = []
         
-        Args:
-            txt_path: 文本文件路径
-            encoding: 文件编码
-        
-        Returns:
-            提取的文本段落列表
-        """
         try:
-            # 尝试不同的编码
-            encodings = [encoding, 'utf-8', 'gbk', 'gb2312']
+            # 尝试不同编码读取文件
+            encodings = ['utf-8', 'gbk', 'gb2312']
+            content = None
             
-            for enc in encodings:
+            for encoding in encodings:
                 try:
-                    with open(txt_path, 'r', encoding=enc) as file:
-                        content = file.read()
+                    with open(file_path, 'r', encoding=encoding) as file:
+                        content = file.read().strip()
                         break
                 except UnicodeDecodeError:
                     continue
-            else:
-                logger.error(f"无法使用任何编码读取文件: {txt_path}")
+            
+            if content is None:
+                logger.error(f"无法使用任何编码读取文件: {file_path}")
                 return []
             
-            # 按用户要求：以\n为分段标准，保持原始结构
-            paragraphs = content.split('\n')
-            text_chunks = []
+            if not content:
+                return []
             
-            for para in paragraphs:
-                para = para.strip()
-                # 只要不是空行，且有一定长度，就作为一个文本块
-                if para and len(para) > 10:
-                    text_chunks.append(para)
+            # 检查是否是仪表安装规范文档（通过文件名和内容特征判断）
+            is_instrument_standard = (
+                '仪表安装规范' in os.path.basename(file_path) or 
+                '第 1.0.1 条本规范适用于工业自动化仪表' in content[:200]
+            )
             
-            logger.info(f"从文本文件 {txt_path} 提取了 {len(text_chunks)} 个文本块")
+            if is_instrument_standard:
+                # 对于仪表安装规范，按条款号分割
+                import re
+                
+                # 支持多种编号格式的正则表达式
+                patterns = [
+                    r'第\s*\d+\.\d+\.\d+\s*条',  # 第 1.0.1 条
+                    r'[一二三四五六七八九十]{1,2}\.?\s*',  # 一. 或 一
+                    r'[一二三四五六七八九十]{1,2}、\s*',  # 一、
+                    r'\d+\.?\s*',  # 1. 或 1
+                    r'\d+、\s*',  # 1、
+                    r'\(\d+\)\s*',  # (1)
+                    r'[一二三四五六七八九十]{1,2}\)\s*',  # 一)
+                    r'[一二三四五六七八九十]{1,2}\)、\s*',  # 一)、
+                    r'①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳',  # ①②③等
+                ]
+                
+                # 先尝试最精确的"第 X.X.X 条"格式
+                clause_pattern = r'第\s*\d+\.\d+\.\d+\s*条'
+                clause_matches = re.findall(clause_pattern, content)
+                
+                if len(clause_matches) > 10:  # 如果找到足够多的条款，使用条款分割
+                    # 分割文档
+                    clauses = re.split(clause_pattern, content)
+                    
+                    # 重新组合，每个条款包含条款号和内容
+                    for i, clause_content in enumerate(clauses):
+                        if i == 0:
+                            # 第一部分是条款号之前的内容（如果有的话）
+                            if clause_content.strip():
+                                text_chunks.append(clause_content.strip())
+                        else:
+                            # 组合条款号和内容
+                            if i-1 < len(clause_matches):
+                                clause_title = clause_matches[i-1]
+                                full_clause = f"{clause_title} {clause_content.strip()}"
+                                if len(full_clause) > 20:  # 最小长度过滤
+                                    text_chunks.append(full_clause)
+                    
+                    logger.info(f"按条款分割仪表规范文档 {file_path}，提取了 {len(text_chunks)} 个条款")
+                else:
+                    # 如果没有足够的"第 X.X.X 条"格式，尝试其他编号格式
+                    logger.info(f"未找到足够的标准条款格式，尝试其他编号格式")
+                    
+                    # 尝试按其他编号格式分割
+                    best_split = []
+                    best_pattern = None
+                    
+                    for pattern in patterns[1:]:  # 跳过第一个已经试过的模式
+                        try:
+                            matches = re.findall(pattern, content)
+                            if len(matches) > 5:  # 如果找到足够多的匹配
+                                splits = re.split(pattern, content)
+                                if len(splits) > len(best_split):
+                                    best_split = splits
+                                    best_pattern = pattern
+                                    best_matches = matches
+                        except:
+                            continue
+                    
+                    if best_split and len(best_split) > 3:
+                        # 使用找到的最佳分割方式
+                        for i, section_content in enumerate(best_split):
+                            if i == 0:
+                                if section_content.strip():
+                                    text_chunks.append(section_content.strip())
+                            else:
+                                if i-1 < len(best_matches):
+                                    section_title = best_matches[i-1]
+                                    full_section = f"{section_title} {section_content.strip()}"
+                                    if len(full_section) > 20:
+                                        text_chunks.append(full_section)
+                        
+                        logger.info(f"按编号格式 '{best_pattern}' 分割文档 {file_path}，提取了 {len(text_chunks)} 个段落")
+                    else:
+                        # 如果所有编号格式都不适用，回退到段落分割
+                        paragraphs = content.split('\n')
+                        for paragraph in paragraphs:
+                            paragraph = paragraph.strip()
+                            if paragraph and len(paragraph) > 50:  # 对于复杂文档提高最小长度
+                                text_chunks.append(paragraph)
+                        
+                        logger.info(f"使用段落分割文档 {file_path}，提取了 {len(text_chunks)} 个段落")
+            else:
+                # 对于其他文档，保持原有的按段落分割逻辑
+                paragraphs = content.split('\n')
+                for paragraph in paragraphs:
+                    paragraph = paragraph.strip()
+                    if paragraph and len(paragraph) > 10:
+                        text_chunks.append(paragraph)
+                        
+                logger.info(f"从文本文件 {file_path} 提取了 {len(text_chunks)} 个文本块")
+            
             return text_chunks
             
         except Exception as e:

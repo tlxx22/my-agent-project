@@ -178,7 +178,7 @@ def classify_instrument_types(parsed_data: Dict, use_llm: bool = True) -> Dict[s
                     use_llm=True
                 )
                 llm_classifications.append(classification)
-            
+        
             # 更新未分类项的分类结果
             df.loc[unclassified_mask, '仪表类型'] = llm_classifications
             
