@@ -62,14 +62,15 @@ def extract_tables_from_excel(file_path: str) -> List[Tuple[str, pd.DataFrame]]:
 
 def extract_excel_tables(file_path: str, keyword: str = "仪表清单") -> List[Dict]:
     """
-    读取Excel文件并识别包含关键字的表格
+    读取Excel文件并提取所有工作表
+    让用户自己选择需要的表格，而不是基于关键字自动过滤
     
     Args:
         file_path: Excel文件路径
-        keyword: 识别关键字，默认为"仪表清单"
+        keyword: 保留参数以兼容现有调用，但不再使用
     
     Returns:
-        包含表格信息的列表，每个元素包含sheet_name, headers, data
+        包含所有表格信息的列表，每个元素包含sheet_name, headers, data
     """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"文件不存在: {file_path}")
@@ -94,52 +95,18 @@ def extract_excel_tables(file_path: str, keyword: str = "仪表清单") -> List[
                 # 读取当前sheet
                 df = pd.read_excel(xl_file, sheet_name=sheet_name, header=None)
                 
-                # 查找包含关键字的行
-                keyword_found = False
-                for idx, row in df.iterrows():
-                    row_str = ' '.join(str(cell) for cell in row.dropna())
-                    if keyword in row_str:
-                        keyword_found = True
-                        logger.info(f"在工作表 {sheet_name} 第 {idx+1} 行找到关键字: {keyword}")
-                        
-                        # 尝试识别表头
-                        headers = None
-                        data_start_idx = idx + 1
-                        
-                        # 检查关键字所在行是否可能是表头
-                        if pd.notna(row).sum() > 1:  # 如果该行有多个非空值，可能是表头
-                            headers = [str(cell).strip() for cell in row.dropna()]
-                        else:
-                            # 查找下一行作为表头
-                            if data_start_idx < len(df):
-                                next_row = df.iloc[data_start_idx]
-                                if pd.notna(next_row).sum() > 1:
-                                    headers = [str(cell).strip() for cell in next_row.dropna()]
-                                    data_start_idx += 1
-                        
-                        # 读取数据
-                        if headers and data_start_idx < len(df):
-                            # 重新读取，使用识别的表头行
-                            table_df = pd.read_excel(xl_file, sheet_name=sheet_name, 
-                                                   skiprows=data_start_idx-1)  # 读取所有数据，不限制行数
-                            
-                            # 清理空行
-                            table_df = table_df.dropna(how='all')
-                            
-                            if not table_df.empty:
-                                results.append({
-                                    'name': sheet_name,
-                                    'description': f'包含{len(table_df)}行数据的仪表表格',
-                                    'sheet_name': sheet_name,
-                                    'headers': list(table_df.columns),
-                                    'data': table_df,
-                                    'keyword_row': idx + 1
-                                })
-                        
-                        break  # 找到关键字后跳出当前sheet的循环
+                # 清理空行空列
+                df = df.dropna(how='all').dropna(axis=1, how='all')
                 
-                if not keyword_found:
-                    logger.info(f"工作表 {sheet_name} 中未找到关键字: {keyword}")
+                if df.empty:
+                    logger.info(f"工作表 {sheet_name} 为空，跳过")
+                    continue
+                
+                # 直接处理每个工作表，不区分关键字优先级
+                table_info = _process_any_table(xl_file, sheet_name, df)
+                if table_info:
+                    results.append(table_info)
+                    logger.info(f"成功处理工作表: {sheet_name} ({len(table_info['data'])}行)")
                     
             except Exception as e:
                 logger.error(f"处理工作表 {sheet_name} 时出错: {str(e)}")
@@ -152,11 +119,69 @@ def extract_excel_tables(file_path: str, keyword: str = "仪表清单") -> List[
         raise
     
     if not results:
-        logger.warning(f"未在任何工作表中找到包含关键字 '{keyword}' 的表格")
+        logger.warning(f"未找到任何有效的表格")
     else:
         logger.info(f"成功提取 {len(results)} 个表格")
     
     return results
+
+def _process_any_table(xl_file, sheet_name: str, df: pd.DataFrame) -> Optional[Dict]:
+    """
+    处理任何工作表，不区分类型
+    
+    Args:
+        xl_file: Excel文件对象
+        sheet_name: 工作表名称
+        df: DataFrame
+    
+    Returns:
+        表格信息字典
+    """
+    try:
+        # 查找标题行
+        header_row_idx = -1
+        
+        # 查找包含"位号"和"型号"的行作为标题行（仪表数据表格）
+        for idx in range(min(10, len(df))):
+            row_str = ' '.join(str(cell) for cell in df.iloc[idx].dropna()).lower()
+            if '位号' in row_str and '型号' in row_str:
+                header_row_idx = idx
+                logger.info(f"在工作表 {sheet_name} 第 {idx+1} 行找到仪表标题行")
+                break
+        
+        if header_row_idx >= 0:
+            # 仪表数据表格：重新读取，使用找到的标题行
+            table_df = pd.read_excel(xl_file, sheet_name=sheet_name, 
+                                   skiprows=header_row_idx)
+            
+            # 清理空行
+            table_df = table_df.dropna(how='all')
+            
+            if not table_df.empty:
+                return {
+                    'name': sheet_name,
+                    'description': f'仪表数据表格，包含{len(table_df)}行数据',
+                    'sheet_name': sheet_name,
+                    'headers': list(table_df.columns),
+                    'data': table_df,
+                    'table_type': 'instrument_data'
+                }
+        else:
+            # 其他类型表格：直接使用原始数据
+            logger.info(f"工作表 {sheet_name} 未找到仪表标题行，作为普通表格处理")
+            return {
+                'name': sheet_name,
+                'description': f'普通表格，包含{len(df)}行数据',
+                'sheet_name': sheet_name,
+                'headers': [f'Column_{i}' for i in range(len(df.columns))],
+                'data': df,
+                'table_type': 'general'
+            }
+        
+    except Exception as e:
+        logger.error(f"处理表格失败: {str(e)}")
+    
+    return None
 
 def validate_instrument_table(df: pd.DataFrame) -> bool:
     """

@@ -763,25 +763,36 @@ def summarize_statistics_node(state: InstrumentAgentState) -> InstrumentAgentSta
         instruments = state.get("classified_instruments", [])
         logger.info(f"统计 {len(instruments)} 个仪表")
         
-        # 转换为DataFrame格式
-        import pandas as pd
-        df = pd.DataFrame(instruments)
-        
-        # 调用统计工具
-        from tools.summarize_statistics import summarize_statistics
-        stats_df = summarize_statistics(df, use_llm_classification=False)
-        
-        # 转换统计结果为字典格式
+        # 直接使用已分类的数据进行统计，不再重新分类
         statistics = {
             "总数量": len(instruments),
             "总台数": sum(inst.get('数量', 1) for inst in instruments),
             "类型统计": {},
-            "详细信息": stats_df.to_dict('records') if not stats_df.empty else []
+            "详细信息": []
         }
         
         # 按类型统计
         type_stats = {}
-        model_set = set()  # 用于统计不同型号数量
+        standard_model_set = set()  # 用于统计标准型号数量
+        no_model_count = 0  # 只有位号无型号的数量
+        
+        def is_standard_model(model_str):
+            """判断是否为标准仪表型号"""
+            if not model_str or str(model_str).strip() in ['', 'nan', 'None', '未知型号']:
+                return False
+            
+            model_str = str(model_str).strip()
+            
+            # 排除过长的描述性文字（标准型号通常较短）
+            if len(model_str) > 20:
+                return False
+            
+            # 排除包含"控制箱"等描述性词汇的
+            descriptive_keywords = ['控制箱', '操作台', '进口', '出口', '紧急', '向空', '排汽']
+            if any(keyword in model_str for keyword in descriptive_keywords):
+                return False
+            
+            return True
         
         for inst in instruments:
             inst_type = inst.get('类型', '无法识别')
@@ -792,11 +803,38 @@ def summarize_statistics_node(state: InstrumentAgentState) -> InstrumentAgentSta
                 type_stats[inst_type] = 0
             type_stats[inst_type] += inst.get('数量', 1)
             
-            # 收集型号用于计算不同规格数
-            model_set.add(f"{inst_type}-{inst_model}")
+            # 区分标准型号和非标准型号
+            if is_standard_model(inst_model):
+                standard_model_set.add(inst_model)
+            else:
+                no_model_count += inst.get('数量', 1)
         
         statistics["类型统计"] = type_stats
-        statistics["不同型号数"] = len(model_set)
+        statistics["不同型号数"] = len(standard_model_set)
+        statistics["只有位号无型号"] = no_model_count
+        
+        # 生成详细信息（按型号汇总）
+        from collections import defaultdict
+        model_summary = defaultdict(lambda: {'数量': 0, '位号': [], '类型': '', '规格': set()})
+        
+        for inst in instruments:
+            model = inst.get('型号', '未知型号')
+            model_summary[model]['数量'] += inst.get('数量', 1)
+            model_summary[model]['类型'] = inst.get('类型', '无法识别')
+            if inst.get('位号'):
+                model_summary[model]['位号'].append(inst.get('位号'))
+            if inst.get('规格'):
+                model_summary[model]['规格'].add(inst.get('规格'))
+        
+        # 转换为详细信息列表
+        for model, info in model_summary.items():
+            statistics["详细信息"].append({
+                '仪表类型': info['类型'],
+                '型号': model,
+                '数量总和': info['数量'],
+                '规格汇总': '; '.join(info['规格']),
+                '位号列表': '; '.join(info['位号'])
+            })
         
         state["instrument_statistics"] = statistics
         logger.info(f"统计完成: {statistics['总台数']} 台仪表，{len(statistics['类型统计'])} 种类型")
@@ -970,6 +1008,11 @@ def display_existing_statistics(state: InstrumentAgentState) -> InstrumentAgentS
         print(f"仪表类型: {len(stats.get('类型统计', {}))} 种")
         print(f"不同型号: {stats.get('不同型号数', '未知')} 种")
         
+        # 显示只有位号无型号的统计
+        no_model_count = stats.get('只有位号无型号', 0)
+        if no_model_count > 0:
+            print(f"只有位号无型号: {no_model_count} 台")
+        
         type_distribution = stats.get('类型统计', {})
         if type_distribution:
             print("\n类型分布:")
@@ -986,6 +1029,42 @@ def display_existing_statistics(state: InstrumentAgentState) -> InstrumentAgentS
     state["final_report"] = f"仪表统计信息：\n{stats}"
     logger.info("显示已有统计结果")
     return state
+
+def _is_semantically_similar(new_standard: str, existing_standards: List[str], threshold: float = 0.8) -> bool:
+    """
+    判断新标准是否与已有标准语义相似
+    
+    Args:
+        new_standard: 新标准文本
+        existing_standards: 已有标准列表
+        threshold: 语义相似度阈值
+    
+    Returns:
+        True表示相似，应该去重
+    """
+    if not existing_standards:
+        return False
+    
+    try:
+        # 简化的语义相似度判断：基于关键词重叠度
+        new_words = set(new_standard.replace('。', '').replace('，', '').replace(' ', '').split())
+        
+        for existing in existing_standards:
+            existing_words = set(existing.replace('。', '').replace('，', '').replace(' ', '').split())
+            
+            # 计算词汇重叠度
+            if len(new_words) > 0 and len(existing_words) > 0:
+                overlap = len(new_words & existing_words)
+                similarity = overlap / min(len(new_words), len(existing_words))
+                
+                if similarity >= threshold:
+                    return True
+        
+        return False
+        
+    except Exception:
+        # 如果语义判断失败，回退到文本完全匹配
+        return new_standard in existing_standards
 
 def match_standard_clause_node(state: InstrumentAgentState) -> InstrumentAgentState:
     """匹配标准条款"""
@@ -1018,22 +1097,29 @@ def match_standard_clause_node(state: InstrumentAgentState) -> InstrumentAgentSt
                 print(f"\n🔍 匹配标准 {i}/{len(instrument_types)}: {inst_type}")
                 from tools.match_standard_clause import match_standard_clause
                 standards = match_standard_clause(inst_type, query_type="installation", top_k=3)
-                print(f"   ✅ 找到 {len(standards)} 条标准")
                 
-                # 打印每条标准的详细内容
-                for j, std in enumerate(standards, 1):
-                    print(f"   📋 标准 {j}: {std[:100]}..." if len(std) > 100 else f"   📋 标准 {j}: {std}")
-                
-                # 检查并添加到总列表（带去重）
-                added_count = 0
-                for std in standards:
-                    if std not in all_standards:
-                        all_standards.append(std)
-                        added_count += 1
-                    else:
-                        print(f"   ⚠️ 跳过重复标准: {std[:50]}...")
-                
-                print(f"   ➕ 新增 {added_count} 条标准到总列表")
+                if standards:
+                    print(f"   ✅ 找到 {len(standards)} 条高质量标准")
+                    
+                    # 打印每条标准的详细内容
+                    for j, std in enumerate(standards, 1):
+                        print(f"   📋 标准 {j}: {std[:100]}..." if len(std) > 100 else f"   📋 标准 {j}: {std}")
+                    
+                    # 检查并添加到总列表（带语义去重）
+                    added_count = 0
+                    for std in standards:
+                        # 检查是否与已有标准语义相似
+                        is_duplicate = _is_semantically_similar(std, all_standards)
+                        
+                        if not is_duplicate:
+                            all_standards.append(std)
+                            added_count += 1
+                        else:
+                            print(f"   ⚠️ 跳过语义相似标准: {std[:50]}...")
+                    
+                    print(f"   ➕ 新增 {added_count} 条标准到总列表")
+                else:
+                    print(f"   ❌ 未找到符合质量要求的标准 (相似度阈值: 0.6)")
                 
             except Exception as e:
                 print(f"   ⚠️ 匹配失败: {str(e)}")
@@ -1322,10 +1408,8 @@ def task_confirmation_gateway(state: InstrumentAgentState) -> str:
 
 def table_selection_gateway(state: InstrumentAgentState) -> str:
     """表格选择网关 - 决定选择方式"""
-    if not state.get("has_multiple_tables", False):
-        return "single"
-    
-    # 多表格时直接让用户选择（提供智能提示）
+    # 总是让用户确认表格选择，确保使用正确的数据
+    # 这样可以避免自动使用错误的表格
     return "user_select"
 
 def task_continue_gateway(state: InstrumentAgentState) -> str:

@@ -205,22 +205,28 @@ class DocumentIndexer:
                 clause_matches = re.findall(clause_pattern, content)
                 
                 if len(clause_matches) > 10:  # 如果找到足够多的条款，使用条款分割
-                    # 分割文档
-                    clauses = re.split(clause_pattern, content)
+                    logger.info(f"找到 {len(clause_matches)} 个标准条款，开始按条款分割")
                     
-                    # 重新组合，每个条款包含条款号和内容
-                    for i, clause_content in enumerate(clauses):
-                        if i == 0:
-                            # 第一部分是条款号之前的内容（如果有的话）
-                            if clause_content.strip():
-                                text_chunks.append(clause_content.strip())
+                    # 找出每个条款在文本中的位置
+                    clause_positions = []
+                    for match in re.finditer(clause_pattern, content):
+                        clause_positions.append((match.start(), match.end(), match.group()))
+                    
+                    # 按位置分割并组合条款
+                    for i, (start, end, clause_title) in enumerate(clause_positions):
+                        # 确定条款内容的结束位置
+                        if i + 1 < len(clause_positions):
+                            next_start = clause_positions[i + 1][0]
+                            clause_content = content[end:next_start].strip()
                         else:
-                            # 组合条款号和内容
-                            if i-1 < len(clause_matches):
-                                clause_title = clause_matches[i-1]
-                                full_clause = f"{clause_title} {clause_content.strip()}"
-                                if len(full_clause) > 20:  # 最小长度过滤
-                                    text_chunks.append(full_clause)
+                            # 最后一个条款到文档结尾
+                            clause_content = content[end:].strip()
+                        
+                        # 组合完整条款
+                        if clause_content:
+                            full_clause = f"{clause_title} {clause_content}"
+                            if len(full_clause) > 30:  # 确保是有意义的条款
+                                text_chunks.append(full_clause)
                     
                     logger.info(f"按条款分割仪表规范文档 {file_path}，提取了 {len(text_chunks)} 个条款")
                 else:
@@ -255,7 +261,7 @@ class DocumentIndexer:
                                     full_section = f"{section_title} {section_content.strip()}"
                                     if len(full_section) > 20:
                                         text_chunks.append(full_section)
-                        
+            
                         logger.info(f"按编号格式 '{best_pattern}' 分割文档 {file_path}，提取了 {len(text_chunks)} 个段落")
                     else:
                         # 如果所有编号格式都不适用，回退到段落分割

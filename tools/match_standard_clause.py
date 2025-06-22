@@ -48,14 +48,14 @@ class StandardClauseRetriever:
         self.is_loaded = success
         return success
     
-    def search_related_clauses(self, query: str, top_k: int = 5, min_similarity: float = 0.3) -> List[Dict]:
+    def search_related_clauses(self, query: str, top_k: int = 5, min_similarity: float = 0.6) -> List[Dict]:
         """
         搜索与查询相关的规范条款
         
         Args:
             query: 查询字符串
             top_k: 返回最相关的k个结果
-            min_similarity: 最小相似度阈值
+            min_similarity: 最小相似度阈值(提高到0.6)
         
         Returns:
             相关条款列表，每个条款包含content, score, metadata
@@ -71,8 +71,9 @@ class StandardClauseRetriever:
             # 标准化查询向量
             faiss.normalize_L2(query_embedding)
             
-            # 在索引中搜索
-            scores, indices = self.indexer.index.search(query_embedding.astype(np.float32), top_k)
+            # 在索引中搜索更多候选结果
+            search_k = min(top_k * 3, 20)  # 搜索更多候选结果进行质量过滤
+            scores, indices = self.indexer.index.search(query_embedding.astype(np.float32), search_k)
             
             results = []
             for i, (score, idx) in enumerate(zip(scores[0], indices[0])):
@@ -82,13 +83,23 @@ class StandardClauseRetriever:
                 if score < min_similarity:  # 相似度太低
                     continue
                 
+                content = self.indexer.documents[idx]
+                
+                # 质量过滤：排除明显不相关的内容
+                if self._is_low_quality_match(content, query):
+                    continue
+                
                 result = {
-                    'content': self.indexer.documents[idx],
+                    'content': content,
                     'score': float(score),
                     'metadata': self.indexer.metadata[idx],
                     'rank': i + 1
                 }
                 results.append(result)
+                
+                # 达到目标数量就停止
+                if len(results) >= top_k:
+                    break
             
             logger.info(f"查询 '{query}' 找到 {len(results)} 个相关条款")
             return results
@@ -96,6 +107,84 @@ class StandardClauseRetriever:
         except Exception as e:
             logger.error(f"搜索规范条款时出错: {str(e)}")
             return []
+    
+    def _is_low_quality_match(self, content: str, query: str) -> bool:
+        """
+        判断是否为低质量匹配
+        
+        Args:
+            content: 匹配的内容
+            query: 查询词
+        
+        Returns:
+            True表示低质量，应该过滤
+        """
+        # 过滤过短的内容
+        if len(content.strip()) < 15:
+            return True
+        
+        # 过滤只有标题没有实质内容的条款
+        title_only_patterns = [
+            r'^[一二三四五六七八九十\d+]+[、．\.\s]*[^。！？]*$',  # 只有编号和短标题
+            r'^第\s*\d+\.\d+\.\d+\s*条\s*[^。！？]{0,20}$',  # 只有条款号和短标题
+            r'^[^。！？]{0,30}$',  # 内容太短，可能只是标题片段
+        ]
+        
+        for pattern in title_only_patterns:
+            import re
+            if re.match(pattern, content.strip()):
+                return True
+        
+        # 过滤明显不相关的内容（通过关键词检查）
+        query_lower = query.lower()
+        content_lower = content.lower()
+        
+        # 更严格的仪表类型匹配检查
+        instrument_type_map = {
+            '温度': ['温度', '热电偶', '热电阻', '温度计', '感温'],
+            '压力': ['压力', '压力表', '压力变送器', '压力取源'],
+            '流量': ['流量', '流量计', '流量变送器', '转子流量', '电磁流量'],
+            '液位': ['液位', '液位计', '液位变送器', '浮筒', '浮简', '物位'],
+            '控制': ['控制', '控制箱', '控制柜', '电动门', '调节阀'],
+            '调节阀': ['调节阀', '执行机构', '阀体', '气动'],
+            '电动门': ['电动门', '控制箱', '联锁', '开关']
+        }
+        
+        # 确定查询的仪表类型
+        query_type = None
+        for inst_type, keywords in instrument_type_map.items():
+            if any(kw in query_lower for kw in keywords):
+                query_type = inst_type
+                break
+        
+        # 如果确定了查询类型，检查内容是否匹配
+        if query_type:
+            type_keywords = instrument_type_map[query_type]
+            content_matches_type = any(kw in content_lower for kw in type_keywords)
+            
+            # 检查是否包含其他仪表类型（交叉污染）
+            other_types = [t for t in instrument_type_map.keys() if t != query_type]
+            has_cross_contamination = False
+            
+            for other_type in other_types:
+                other_keywords = instrument_type_map[other_type]
+                # 如果内容强烈指向其他仪表类型，则认为是交叉污染
+                other_matches = sum(1 for kw in other_keywords if kw in content_lower)
+                if other_matches >= 2:  # 包含2个或以上其他类型关键词
+                    has_cross_contamination = True
+                    break
+            
+            # 如果不匹配目标类型，或者有严重交叉污染，则过滤
+            if not content_matches_type or has_cross_contamination:
+                return True
+            
+            # 额外检查：如果查询是具体仪表类型，内容却是通用条款，也过滤
+            if query_type in ['温度', '压力', '流量', '液位']:
+                generic_phrases = ['仪表安装', '安装规则', '通用要求', '一般规定']
+                if any(phrase in content_lower for phrase in generic_phrases) and len(content) < 100:
+                    return True
+        
+        return False
     
     def search_by_instrument_type(self, instrument_type: str, top_k: int = 5) -> List[Dict]:
         """
@@ -108,10 +197,11 @@ class StandardClauseRetriever:
         Returns:
             相关规范条款列表
         """
-        # 构建针对性的查询
+        # 优化查询策略：更精确的查询词组合
         queries = [
-            f"{instrument_type}安装方法",
+            f"{instrument_type}安装",
             f"{instrument_type}安装要求",
+            f"{instrument_type}安装方法", 
             f"{instrument_type}安装位置",
             f"{instrument_type}安装规范"
         ]
@@ -120,7 +210,8 @@ class StandardClauseRetriever:
         seen_contents = set()  # 避免重复结果
         
         for query in queries:
-            results = self.search_related_clauses(query, top_k=3)
+            # 每个查询最多取2个结果，提高精度
+            results = self.search_related_clauses(query, top_k=2, min_similarity=0.6)
             
             for result in results:
                 content = result['content']

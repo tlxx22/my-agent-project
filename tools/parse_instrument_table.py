@@ -316,21 +316,36 @@ def extract_and_parse_instrument_table(df: pd.DataFrame) -> pd.DataFrame:
     df_data[tag_col] = df_data[tag_col].astype(str).str.strip()
     df_data[model_col] = df_data[model_col].astype(str).str.strip()
     
-    # 主行mask：位号不为空且（型号不为空 或者 位号包含特殊标识）
-    # 特殊处理：电动门控制箱（MB-）等可能没有标准型号
-    mask_main = (
-        df_data[tag_col].notna() & 
-        (df_data[tag_col] != '') &
-        (df_data[tag_col] != 'nan') &
-        (
-            # 标准情况：型号不为空
-            (df_data[model_col].notna() & 
-        (df_data[model_col] != '') &
-             (df_data[model_col] != 'nan')) |
-            # 特殊情况：电动门控制箱等可能没有型号但有位号
-            df_data[tag_col].str.contains(r'^(MB-|CV-|FV-|HV-|LV-|PV-|TV-)', na=False)
-        )
-    )
+    # 主行mask：识别真正的仪表行，排除分类标题和说明行
+    # 1. 位号不为空
+    # 2. 排除纯数字编号（如"一：", "二："等分类标题）
+    # 3. 排除说明行
+    def is_valid_instrument_row(tag_value):
+        """判断是否为有效的仪表行"""
+        if not tag_value or str(tag_value).strip() in ['', 'nan', 'None']:
+            return False
+        
+        tag_str = str(tag_value).strip()
+        
+        # 排除分类标题行（如"一："、"二："、"三："等）
+        if re.match(r'^[一二三四五六七八九十\d+][:：\s]*$', tag_str):
+            return False
+        
+        # 排除说明行
+        if tag_str.startswith('说明'):
+            return False
+        
+        # 仪表位号通常包含字母和数字的组合
+        if re.match(r'^[A-Z]+[A-Z0-9\-]*\d+$', tag_str, re.IGNORECASE):
+            return True
+        
+        # 或者是特殊格式的位号（如MB-101等）
+        if re.match(r'^[A-Z]{1,4}-\d+$', tag_str, re.IGNORECASE):
+            return True
+        
+        return False
+    
+    mask_main = df_data[tag_col].apply(is_valid_instrument_row)
     
     if not mask_main.any():
         logger.error("没有找到任何主行（位号+型号同时非空）")
@@ -368,15 +383,15 @@ def extract_and_parse_instrument_table(df: pd.DataFrame) -> pd.DataFrame:
         else:
             model_values[group_id] = ""
     
-    # 重建型号列：只有主行有值，补充行为空
+    # 重建型号列：保持原始型号值，包括空值
     def get_model_value(row):
         if mask_main_aligned.loc[row.name]:
             original_model = model_values.get(row["group_id"], "")
-            # 如果型号为空但位号符合特殊模式，使用测点名称或给默认值
+            # 对于电动门控制箱等特殊情况，使用描述性名称
             if original_model in ["", "nan", None] or pd.isna(original_model):
                 tag_value = str(row.get(tag_col, ""))
                 if tag_value.startswith("MB-"):
-                    # 电动门控制箱使用测点名称作为型号，如果没有则用默认值
+                    # 电动门控制箱使用测点名称作为型号
                     test_point_col = None
                     for col in df_data.columns:
                         if any(keyword in str(col).lower() for keyword in ['测点', '名称', '说明']):
@@ -389,7 +404,8 @@ def extract_and_parse_instrument_table(df: pd.DataFrame) -> pd.DataFrame:
                 elif tag_value.startswith(("CV-", "FV-", "HV-", "LV-", "PV-", "TV-")):
                     return "控制阀"  # 默认型号
                 else:
-                    return "未知型号"
+                    # 对于其他情况，保持型号为空
+                    return ""
             return original_model
         else:
             return ""
@@ -463,15 +479,12 @@ def extract_and_parse_instrument_table(df: pd.DataFrame) -> pd.DataFrame:
     # 删除临时列
     df_final = df_final.drop('_original_row', axis=1)
     
-    # Step i: 删除空白桶 - 主键列为空的行删除
-    # 过滤掉位号或型号为空的行
+    # Step i: 删除空白桶 - 只要求位号不为空
+    # 允许型号为空（如双色水位计等没有标准型号的仪表）
     df_final = df_final[
         (df_final[tag_col].notna()) & 
         (df_final[tag_col].astype(str).str.strip() != '') &
-        (df_final[tag_col].astype(str).str.strip() != 'nan') &
-        (df_final[model_col].notna()) & 
-        (df_final[model_col].astype(str).str.strip() != '') &
-        (df_final[model_col].astype(str).str.strip() != 'nan')
+        (df_final[tag_col].astype(str).str.strip() != 'nan')
     ].copy()
     
     # 标准化列名

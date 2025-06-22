@@ -273,8 +273,8 @@ def batch_classify_from_table(
 
 def batch_classify_instruments(
     models: List[str], 
-    specs: List[str] = None,
-    table_categories: List[str] = None, 
+    specs: List[str] = None, 
+    table_categories: List[str] = None,
     use_llm: bool = True
 ) -> List[str]:
     """
@@ -295,6 +295,8 @@ def batch_classify_instruments(
     specs = specs or [""] * len(models)
     table_categories = table_categories or [""] * len(models)
     
+
+    
     # 确保所有列表长度一致
     max_len = max(len(models), len(specs), len(table_categories))
     while len(specs) < max_len:
@@ -311,6 +313,7 @@ def batch_classify_instruments(
         else:
             # 使用标准分类逻辑
             spec = specs[i] if i < len(specs) else ""
+
             result = classify_instrument_type(
                 model=model,
                 spec=spec,
