@@ -126,7 +126,7 @@ def parse_quantity_field(quantity_str: Union[str, int, float]) -> int:
 
 def find_category_sections(df: pd.DataFrame) -> List[Tuple[str, int, int]]:
     """
-    识别表格中的分类标题行，确定每个类别的起始和结束行
+    识别表格中的分类标题行，精确匹配分类格式
     
     Args:
         df: 原始DataFrame
@@ -134,26 +134,75 @@ def find_category_sections(df: pd.DataFrame) -> List[Tuple[str, int, int]]:
     Returns:
         List of (category_name, start_row, end_row)
     """
-    category_patterns = [
-        (r".*一[：:\s].*", "温度仪表"),
-        (r".*二[：:\s].*", "压力仪表"), 
-        (r".*三[：:\s].*", "流量仪表"),
-        (r".*四[：:\s].*", "液位仪表"),
-        (r".*五[：:\s].*", "两位式电动门控制箱"),
-        (r".*六[：:\s].*", "气动调节阀")
-    ]
-    
     sections = []
+    
+    logger.info("🔍 精确识别表格分类标题")
     
     for idx in range(len(df)):
         row_text = " ".join([str(val) for val in df.iloc[idx].values if pd.notna(val)])
-        logger.debug(f"第{idx+1}行内容: {row_text}")
+        row_text_clean = row_text.strip()
         
-        for pattern, category_name in category_patterns:
-            if re.search(pattern, row_text, re.IGNORECASE):
+        if not row_text_clean:
+            continue
+            
+        logger.debug(f"检查第{idx+1}行: {row_text_clean}")
+        
+        # 精确匹配中文数字分类标题（一：、二：、三：等）
+        chinese_num_patterns = [
+            (r'^一[：:\s]+(.+)', '一'),
+            (r'^二[：:\s]+(.+)', '二'),
+            (r'^三[：:\s]+(.+)', '三'),
+            (r'^四[：:\s]+(.+)', '四'),
+            (r'^五[：:\s]+(.+)', '五'),
+            (r'^六[：:\s]+(.+)', '六'),
+            (r'^七[：:\s]+(.+)', '七'),
+            (r'^八[：:\s]+(.+)', '八'),
+            (r'^九[：:\s]+(.+)', '九'),
+            (r'^十[：:\s]+(.+)', '十')
+        ]
+        
+        # 匹配特殊情况：只有"六"而没有冒号的分类
+        special_patterns = [
+            (r'^六\s+(.+)', '六')
+        ]
+        
+        # 组合所有模式
+        all_patterns = chinese_num_patterns + special_patterns
+        
+        found = False
+        for pattern, num_char in all_patterns:
+            match = re.search(pattern, row_text_clean)
+            if match:
+                # 提取分类名称
+                category_name = match.group(1).strip().split()[0] if match.group(1).strip().split() else '未知分类'
+                
+                # 进一步验证：确保这真的是分类标题
+                # 1. 分类名称不能太长
+                if len(category_name) > 30:
+                    continue
+                    
+                # 2. 不能包含明显的技术参数
+                tech_params = ['MPa', '级', '℃', '°C', 'mm', 'Ф', 'DN', 'PN', 'x', '×', '%']
+                if any(param in category_name for param in tech_params):
+                    continue
+                
+                # 3. 不能包含复杂符号
+                complex_chars = ['/', '（', '）', '(', ')', '=', '-', '+']
+                if any(char in category_name for char in complex_chars):
+                    continue
+                
+                # 4. 应该包含仪表相关词汇（对于明确的数字分类可以放宽）
+                instrument_keywords = ['仪表', '设备', '系统', '控制', '装置', '变送器', '传感器', '计', '表', '阀', '箱', '门']
+                if not any(keyword in category_name for keyword in instrument_keywords):
+                    continue
+                
                 sections.append((category_name, idx, -1))  # -1表示结束行待确定
-                logger.info(f"找到分类标题行: {category_name} 在第{idx+1}行")
+                logger.info(f"✅ 找到分类标题: {num_char}：{category_name} 在第{idx+1}行")
+                found = True
                 break
+        
+        if found:
+            continue  # 找到匹配后跳过其他检查
     
     # 确定每个分类的结束行
     for i in range(len(sections)):
@@ -165,7 +214,10 @@ def find_category_sections(df: pd.DataFrame) -> List[Tuple[str, int, int]]:
             # 最后一个分类到表格结束
             sections[i] = (sections[i][0], current_start, len(df) - 1)
     
-    logger.info(f"识别到 {len(sections)} 个分类区域")
+    logger.info(f"🎯 成功识别到 {len(sections)} 个分类区域")
+    for category_name, start_row, end_row in sections:
+        logger.info(f"   分类: {category_name}, 起始行: {start_row+1}, 结束行: {end_row+1}")
+    
     return sections
 
 def find_header_row(df: pd.DataFrame) -> int:
@@ -470,11 +522,18 @@ def extract_and_parse_instrument_table(df: pd.DataFrame) -> pd.DataFrame:
     # Step h: 根据分类区域分配仪表类型
     df_final['仪表类型'] = "未分类"
     
-    for category_name, start_row, end_row in category_sections:
-        # 找到属于此区域的数据行
-        mask_in_section = (df_final['_original_row'] >= start_row) & (df_final['_original_row'] <= end_row)
-        df_final.loc[mask_in_section, '仪表类型'] = category_name
-        logger.info(f"分配 {mask_in_section.sum()} 行到类别: {category_name}")
+    if category_sections:
+        # 情况1：表格有明确分类，按分类区域分配
+        logger.info("📋 表格有明确分类，使用分类区域分配")
+        for category_name, start_row, end_row in category_sections:
+            # 找到属于此区域的数据行
+            mask_in_section = (df_final['_original_row'] >= start_row) & (df_final['_original_row'] <= end_row)
+            df_final.loc[mask_in_section, '仪表类型'] = category_name
+            logger.info(f"分配 {mask_in_section.sum()} 行到类别: {category_name}")
+    else:
+        # 情况2：表格没有分类，使用LLM判断仪表类型
+        logger.info("🤖 表格没有明确分类，使用LLM智能判断仪表类型")
+        df_final = _classify_instruments_with_llm(df_final, tag_col, model_col)
     
     # 删除临时列
     df_final = df_final.drop('_original_row', axis=1)
@@ -487,7 +546,7 @@ def extract_and_parse_instrument_table(df: pd.DataFrame) -> pd.DataFrame:
         (df_final[tag_col].astype(str).str.strip() != 'nan')
     ].copy()
     
-    # 标准化列名
+    # 标准化列名 - 确保格式一致性
     standard_columns = {'位号': tag_col, '型号': model_col}
     if '数量' in column_mapping:
         standard_columns['数量'] = column_mapping['数量']
@@ -500,7 +559,7 @@ def extract_and_parse_instrument_table(df: pd.DataFrame) -> pd.DataFrame:
     rename_dict = {v: k for k, v in standard_columns.items()}
     df_final = df_final.rename(columns=rename_dict)
     
-    # 确保必要列存在
+    # 确保必要列存在 - 无论有分类还是无分类，格式完全一致
     required_cols = ['位号', '型号', '数量', '规格', '备注', '仪表类型']
     for col in required_cols:
         if col not in df_final.columns:
@@ -511,17 +570,19 @@ def extract_and_parse_instrument_table(df: pd.DataFrame) -> pd.DataFrame:
             else:
                 df_final[col] = ""
     
-    # 选择最终列
+    # 选择最终列 - 确保两种情况格式完全一致
     final_cols = ['位号', '型号', '数量', '规格', '备注', '仪表类型']
     df_final = df_final[final_cols].copy()
     
-    logger.info(f"成功解析 {len(df_final)} 行仪表数据")
+    logger.info(f"✅ 成功解析 {len(df_final)} 行仪表数据")
+    logger.info(f"📊 原始表格行数: {len(df_original)} 行（包含所有行和空行）")
+    logger.info(f"🔍 有效仪表数据: {len(df_final)} 行（去除分类标题和空行后）")
     
     # 输出分类统计
     category_stats = df_final['仪表类型'].value_counts()
-    logger.info("分类统计:")
+    logger.info("📈 分类统计:")
     for category, count in category_stats.items():
-        logger.info(f"  {category}: {count}台")
+        logger.info(f"   • {category}: {count}台")
     
     return df_final
 
@@ -569,6 +630,170 @@ def extract_instrument_info(df: pd.DataFrame) -> pd.DataFrame:
     向后兼容的接口函数
     """
     return extract_and_parse_instrument_table(df)
+
+def _classify_instruments_with_llm(df: pd.DataFrame, tag_col: str, model_col: str) -> pd.DataFrame:
+    """
+    当表格没有明确分类时，使用LLM智能判断每个仪表的类型
+    确保返回的DataFrame格式与有分类情况完全一致
+    
+    Args:
+        df: 仪表数据DataFrame
+        tag_col: 位号列名
+        model_col: 型号列名
+    
+    Returns:
+        添加了智能分类的DataFrame（格式与有分类情况一致）
+    """
+    try:
+        from config.settings import get_openai_config
+        
+        llm_config = get_openai_config()
+        if not llm_config.get('api_key'):
+            logger.warning("⚠️ 没有LLM配置，无法智能分类，保持未分类状态")
+            # 确保返回格式一致：所有仪表标记为"未分类"
+            df_result = df.copy()
+            df_result['仪表类型'] = "未分类"
+            return df_result
+        
+        logger.info(f"🤖 开始LLM智能分类 {len(df)} 个仪表")
+        
+        # 准备分析数据
+        instruments_for_analysis = []
+        for idx, row in df.iterrows():
+            instrument_info = {
+                'index': idx,
+                'tag': str(row.get(tag_col, '')).strip(),
+                'model': str(row.get(model_col, '')).strip(),
+                'spec': str(row.get('规格', '')).strip(),
+                'remark': str(row.get('备注', '')).strip()
+            }
+            instruments_for_analysis.append(instrument_info)
+        
+        # 分批处理（每次最多10个仪表）
+        batch_size = 10
+        df_result = df.copy()
+        
+        # 初始化所有仪表为未分类，确保格式一致
+        df_result['仪表类型'] = "未分类"
+        
+        for i in range(0, len(instruments_for_analysis), batch_size):
+            batch = instruments_for_analysis[i:i+batch_size]
+            logger.info(f"🔍 处理批次 {i//batch_size + 1}: {len(batch)} 个仪表")
+            
+            # 构建LLM分析提示
+            instruments_text = ""
+            for j, inst in enumerate(batch):
+                instruments_text += f"仪表{j+1}: 位号={inst['tag']}, 型号={inst['model']}, 规格={inst['spec']}, 备注={inst['remark']}\n"
+            
+            prompt = f"""请分析以下仪表数据，为每个仪表判断其类型。
+
+仪表信息：
+{instruments_text}
+
+请基于以下常见仪表类型进行分类：
+- 温度仪表：热电偶、热电阻、温度计、温度变送器
+- 压力仪表：压力表、压力变送器、差压变送器
+- 流量仪表：流量计、流量变送器、孔板、喷嘴
+- 液位仪表：液位计、液位变送器、浮球液位计
+- 控制设备：调节阀、控制阀、电动阀、气动阀
+- 电气设备：控制箱、配电箱、操作台
+- 分析仪表：分析仪、检测仪
+- 其他仪表：如果不属于以上类型
+
+请以JSON格式返回结果：
+{{
+    "classifications": [
+        {{
+            "instrument_index": 1,
+            "category": "温度仪表",
+            "confidence": 0.9,
+            "reason": "位号TE开头，型号为热电阻"
+        }},
+        ...
+    ]
+}}
+
+注意：
+- 位号前缀含义：TE/TT=温度, PT/PI=压力, FT/FI=流量, LT/LI=液位, CV/FV=控制阀
+- 根据型号、规格、备注综合判断
+- 置信度范围0-1"""
+
+            # 调用LLM
+            classifications = _call_llm_for_classification(prompt, llm_config)
+            
+            if classifications and 'classifications' in classifications:
+                # 应用分类结果
+                for result in classifications['classifications']:
+                    instrument_index = result.get('instrument_index', 0) - 1  # 转换为0索引
+                    category = result.get('category', '其他仪表')
+                    confidence = result.get('confidence', 0.5)
+                    
+                    if 0 <= instrument_index < len(batch) and confidence >= 0.5:
+                        original_idx = batch[instrument_index]['index']
+                        df_result.at[original_idx, '仪表类型'] = category
+                        logger.info(f"✅ 仪表 {batch[instrument_index]['tag']} 分类为: {category} (置信度: {confidence})")
+                    else:
+                        logger.warning(f"⚠️ 跳过低置信度分类: 置信度 {confidence}")
+            else:
+                logger.warning(f"⚠️ 批次 {i//batch_size + 1} LLM分类失败")
+        
+        # 统计分类结果
+        classification_stats = df_result['仪表类型'].value_counts()
+        logger.info("🎯 LLM智能分类完成:")
+        for category, count in classification_stats.items():
+            logger.info(f"   • {category}: {count}台")
+        
+        # 确保返回的DataFrame格式与有分类情况完全一致
+        # 包含相同的列：['位号', '型号', '数量', '规格', '备注', '仪表类型']
+        return df_result
+        
+    except Exception as e:
+        logger.error(f"❌ LLM智能分类失败: {str(e)}")
+        logger.info("📋 保持原有的未分类状态")
+        # 确保即使出错也返回一致的格式
+        df_result = df.copy()
+        df_result['仪表类型'] = "未分类"
+        return df_result
+
+def _call_llm_for_classification(prompt: str, config: dict) -> dict:
+    """调用LLM进行仪表分类"""
+    try:
+        from openai import OpenAI
+        import json
+        import re
+        
+        client = OpenAI(
+            api_key=config.get('api_key'),
+            base_url=config.get('base_url', 'https://api.openai.com/v1')
+        )
+        
+        response = client.chat.completions.create(
+            model=config.get('model', 'gpt-4o-mini'),
+            messages=[
+                {"role": "system", "content": "你是一个专业的仪表分类专家，擅长根据位号、型号、规格等信息判断仪表类型。"},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.1,
+            max_tokens=2000
+        )
+        
+        result_text = response.choices[0].message.content
+        
+        # 解析JSON响应
+        try:
+            return json.loads(result_text)
+        except json.JSONDecodeError:
+            # 尝试提取JSON内容
+            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+            else:
+                logger.warning(f"无法解析LLM分类响应: {result_text[:200]}...")
+                return {}
+                
+    except Exception as e:
+        logger.error(f"LLM分类调用失败: {str(e)}")
+        return {}
 
 if __name__ == "__main__":
     # 测试代码

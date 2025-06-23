@@ -92,18 +92,21 @@ def extract_excel_tables(file_path: str, keyword: str = "仪表清单") -> List[
             logger.info(f"正在处理工作表: {sheet_name}")
             
             try:
-                # 读取当前sheet
-                df = pd.read_excel(xl_file, sheet_name=sheet_name, header=None)
+                # 读取当前sheet - 使用两种方式获取准确行数
+                df_for_count = pd.read_excel(xl_file, sheet_name=sheet_name)  # 默认读取获取行数
+                original_row_count = len(df_for_count)  # 使用默认读取的行数
+                
+                df_original = pd.read_excel(xl_file, sheet_name=sheet_name, header=None)
                 
                 # 清理空行空列
-                df = df.dropna(how='all').dropna(axis=1, how='all')
+                df = df_original.dropna(how='all').dropna(axis=1, how='all')
                 
                 if df.empty:
                     logger.info(f"工作表 {sheet_name} 为空，跳过")
                     continue
                 
-                # 直接处理每个工作表，不区分关键字优先级
-                table_info = _process_any_table(xl_file, sheet_name, df)
+                # 直接处理每个工作表，传递原始行数
+                table_info = _process_any_table(xl_file, sheet_name, df, original_row_count)
                 if table_info:
                     results.append(table_info)
                     logger.info(f"成功处理工作表: {sheet_name} ({len(table_info['data'])}行)")
@@ -125,14 +128,15 @@ def extract_excel_tables(file_path: str, keyword: str = "仪表清单") -> List[
     
     return results
 
-def _process_any_table(xl_file, sheet_name: str, df: pd.DataFrame) -> Optional[Dict]:
+def _process_any_table(xl_file, sheet_name: str, df: pd.DataFrame, original_row_count: int) -> Optional[Dict]:
     """
     处理任何工作表，不区分类型
     
     Args:
         xl_file: Excel文件对象
         sheet_name: 工作表名称
-        df: DataFrame
+        df: DataFrame（原始完整数据）
+        original_row_count: 原始行数
     
     Returns:
         表格信息字典
@@ -160,7 +164,7 @@ def _process_any_table(xl_file, sheet_name: str, df: pd.DataFrame) -> Optional[D
             if not table_df.empty:
                 return {
                     'name': sheet_name,
-                    'description': f'仪表数据表格，包含{len(table_df)}行数据',
+                    'description': f'包含{original_row_count}行数据的仪表表格',
                     'sheet_name': sheet_name,
                     'headers': list(table_df.columns),
                     'data': table_df,
@@ -171,7 +175,7 @@ def _process_any_table(xl_file, sheet_name: str, df: pd.DataFrame) -> Optional[D
             logger.info(f"工作表 {sheet_name} 未找到仪表标题行，作为普通表格处理")
             return {
                 'name': sheet_name,
-                'description': f'普通表格，包含{len(df)}行数据',
+                'description': f'包含{original_row_count}行数据的表格',
                 'sheet_name': sheet_name,
                 'headers': [f'Column_{i}' for i in range(len(df.columns))],
                 'data': df,

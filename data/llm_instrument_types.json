@@ -1,0 +1,45 @@
+{
+  "instrument_types": {
+    "热电偶": {
+      "category": "温度",
+      "frequency": 15,
+      "description": "用于温度测量的传感器",
+      "llm_confidence": 15
+    },
+    "压力变送器": {
+      "category": "压力",
+      "frequency": 12,
+      "description": "用于压力信号变送的仪表",
+      "llm_confidence": 12
+    },
+    "电磁流量计": {
+      "category": "流量",
+      "frequency": 10,
+      "description": "用于测量液体流量的仪表",
+      "llm_confidence": 10
+    },
+    "涡轮流量计": {
+      "category": "流量",
+      "frequency": 8,
+      "description": "用于测量液体流量的仪表",
+      "llm_confidence": 8
+    },
+    "浮球液位计": {
+      "category": "物位",
+      "frequency": 6,
+      "description": "用于测量液体物位的仪表",
+      "llm_confidence": 6
+    },
+    "差压变送器": {
+      "category": "压力",
+      "frequency": 5,
+      "description": "用于差压测量的仪表",
+      "llm_confidence": 5
+    }
+  },
+  "metadata": {
+    "total_types": 6,
+    "generation_time": "2025-06-23 18:42:41.068175",
+    "method": "llm_analysis"
+  }
+}

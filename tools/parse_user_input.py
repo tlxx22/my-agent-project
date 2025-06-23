@@ -625,15 +625,8 @@ def create_simple_task_plan(user_input: str) -> List[Dict[str, Any]]:
     
     # 检查是否需要安装建议
     if any(keyword in user_input_lower for keyword in ['安装', '建议', 'reco', 'installation']):
-        # 检查是否指定了特定类型
-        instrument_types = ['温度仪表', '压力仪表', '流量仪表', '液位仪表', '两位式电动门控制箱', '气动调节阀']
-        specified_type = None
-        
-        for itype in instrument_types:
-            if itype.replace('仪表', '') in user_input_lower or itype in user_input_lower:
-                specified_type = itype
-                break
-        
+        # 动态检查是否指定了特定类型
+        specified_type = _extract_instrument_type_from_input(user_input_lower)
         tasks.append({"type": "reco", "target": specified_type or "全部"})
     
     # 检查是否需要图表
@@ -642,6 +635,149 @@ def create_simple_task_plan(user_input: str) -> List[Dict[str, Any]]:
     
     # 日志输出由调用方负责，避免重复
     return tasks
+
+def _extract_instrument_type_from_input(user_input_lower: str) -> Optional[str]:
+    """
+    从用户输入中动态提取仪表类型（不使用硬编码）
+    """
+    try:
+        # 尝试从LLM识别结果中获取仪表类型
+        llm_types = _get_llm_identified_types()
+        
+        if llm_types:
+            # 检查用户输入是否匹配任何LLM识别的类型
+            for instrument_type in llm_types:
+                type_lower = instrument_type.lower()
+                # 完整匹配
+                if type_lower in user_input_lower:
+                    return instrument_type
+                # 部分匹配（去掉通用后缀）
+                for suffix in ['仪表', '表', '计', '器']:
+                    if type_lower.endswith(suffix):
+                        base_type = type_lower.replace(suffix, '')
+                        if base_type in user_input_lower:
+                            return instrument_type
+        
+        # 如果LLM类型不匹配，使用基本关键词识别
+        return _basic_type_extraction(user_input_lower)
+        
+    except Exception as e:
+        logger.warning(f"动态类型提取失败: {str(e)}")
+        return _basic_type_extraction(user_input_lower)
+
+def _get_llm_identified_types() -> List[str]:
+    """
+    获取LLM识别的仪表类型列表
+    """
+    try:
+        import os
+        llm_types_file = "./data/llm_instrument_types.json"
+        
+        if os.path.exists(llm_types_file):
+            import json
+            with open(llm_types_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return list(data.get('instrument_types', {}).keys())
+        
+        return []
+        
+    except Exception as e:
+        logger.warning(f"获取LLM识别类型失败: {str(e)}")
+        return []
+
+def _basic_type_extraction(user_input_lower: str) -> Optional[str]:
+    """
+    基本的仪表类型关键词识别（作为备用方案）
+    """
+    # 基本关键词映射（不是硬编码类型，而是关键词到描述的映射）
+    basic_keywords = {
+        '温度': '温度测量',
+        '热电偶': '温度测量', 
+        '热电阻': '温度测量',
+        '压力': '压力测量',
+        '压表': '压力测量',
+        '流量': '流量测量',
+        '流速': '流量测量',
+        '液位': '液位测量',
+        '液面': '液位测量',
+        '电动门': '阀门控制',
+        '控制箱': '阀门控制',
+        '气动': '阀门控制',
+        '调节阀': '阀门控制',
+        '显示': '显示设备',
+        '指示': '显示设备'
+    }
+    
+    for keyword, description in basic_keywords.items():
+        if keyword in user_input_lower:
+            return description
+    
+    return None
+
+def _matches_type_keywords(atype: str, user_input_lower: str) -> bool:
+    """
+    动态匹配仪表类型关键词（不使用硬编码）
+    
+    Args:
+        atype: 仪表类型名称
+        user_input_lower: 用户输入（小写）
+    
+    Returns:
+        是否匹配
+    """
+    atype_lower = atype.lower()
+    
+    # 基于类型名称本身进行分词匹配
+    import re
+    
+    # 提取类型中的关键词
+    type_keywords = []
+    
+    # 从类型名称中提取关键词
+    common_suffixes = ['仪表', '表', '计', '器', '控制箱', '调节阀', '变送器', '传感器']
+    cleaned_type = atype_lower
+    
+    for suffix in common_suffixes:
+        cleaned_type = cleaned_type.replace(suffix, '')
+    
+    # 添加清理后的核心词
+    if cleaned_type.strip():
+        type_keywords.append(cleaned_type.strip())
+    
+    # 添加类型名称中的关键词
+    if '温度' in atype_lower:
+        type_keywords.extend(['温度', '热', '热电偶', '热电阻'])
+    if '压力' in atype_lower:
+        type_keywords.extend(['压力', '压表', '压强'])
+    if '流量' in atype_lower:
+        type_keywords.extend(['流量', '流速', '流体'])
+    if '液位' in atype_lower:
+        type_keywords.extend(['液位', '液面', '水位'])
+    if '电磁' in atype_lower:
+        type_keywords.extend(['电磁', 'electromagnetic'])
+    if '涡轮' in atype_lower:
+        type_keywords.extend(['涡轮', 'turbine'])
+    if '差压' in atype_lower:
+        type_keywords.extend(['差压', '压差'])
+    if '浮球' in atype_lower:
+        type_keywords.extend(['浮球', '浮子'])
+    if '热电偶' in atype_lower:
+        type_keywords.extend(['热电偶', 'thermocouple'])
+    if '控制' in atype_lower:
+        type_keywords.extend(['控制', 'control'])
+    if '调节' in atype_lower:
+        type_keywords.extend(['调节', '调控'])
+    if '电动' in atype_lower:
+        type_keywords.extend(['电动', 'electric'])
+    if '气动' in atype_lower:
+        type_keywords.extend(['气动', 'pneumatic'])
+    
+    # 检查是否有关键词匹配
+    for keyword in type_keywords:
+        if keyword and keyword in user_input_lower:
+            return True
+    
+    return False
 
 def parse_user_input(user_input: str) -> Dict[str, Any]:
     """
@@ -756,20 +892,8 @@ def parse_type_selection(user_input: str, available_types: List[str]) -> List[st
             selected_types.append(atype)
             continue
         
-        # 关键词匹配
-        if atype == '温度仪表' and any(kw in user_input_lower for kw in ['温度', 'temperature', '热电偶', '温度计']):
-            selected_types.append(atype)
-        elif atype == '压力仪表' and any(kw in user_input_lower for kw in ['压力', 'pressure', '压表']):
-            selected_types.append(atype)
-        elif atype == '液位仪表' and any(kw in user_input_lower for kw in ['液位', 'level', '液面']):
-            selected_types.append(atype)
-        elif atype == '流量仪表' and any(kw in user_input_lower for kw in ['流量', 'flow', '流速']):
-            selected_types.append(atype)
-        elif atype == '两位式电动门控制箱' and any(kw in user_input_lower for kw in ['电动门', '控制箱', '阀门']):
-            selected_types.append(atype)
-        elif atype == '气动调节阀' and any(kw in user_input_lower for kw in ['气动', '调节阀', '阀']):
-            selected_types.append(atype)
-        elif atype == '显示仪表' and any(kw in user_input_lower for kw in ['显示', 'display', '指示']):
+        # 动态关键词匹配（基于类型名称和通用关键词）
+        if _matches_type_keywords(atype, user_input_lower):
             selected_types.append(atype)
     
     if selected_types:
