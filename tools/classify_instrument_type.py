@@ -23,7 +23,7 @@ def extract_categories_from_table(table_data: List[List[str]]) -> Dict[str, List
     """
     categories = {}
     current_category = None
-    category_pattern = re.compile(r'^[一二三四五六七八九十\d+][\s:：\.\-]*(.*)$')
+    category_pattern = re.compile(r'^[一二三四五六七八九十\d+][\s:：\.\-\、]*(.*)$')
     
     for row_idx, row in enumerate(table_data):
         if not row or len(row) == 0:

@@ -126,8 +126,12 @@ def parse_instrument_table(table_data: Dict) -> Dict[str, Any]:
 @tool
 def classify_instrument_types(parsed_data: Dict, use_llm: bool = True) -> Dict[str, Any]:
     """
-    补充仪表分类（仅对未分类的仪表进行LLM分类）
-    注意：parse_instrument_table已经完成了基于表格分类的工作
+    仪表分类补充处理：仅在表格没有明确分类时使用LLM分类
+    
+    逻辑说明：
+    1. 如果表格有明确分类，parse_instrument_table已完成所有分类工作，此函数直接返回
+    2. 如果表格没有分类，所有仪表都是"未分类"，使用LLM逐个判断
+    3. LLM可能返回"无法识别"，这些仪表在后续标准匹配中会被跳过
     
     Args:
         parsed_data: 解析后的数据字典（应该已经包含'仪表类型'列）
@@ -152,43 +156,66 @@ def classify_instrument_types(parsed_data: Dict, use_llm: bool = True) -> Dict[s
         classified_count = len(df[df['仪表类型'] != "未分类"])
         unclassified_count = len(df[df['仪表类型'] == "未分类"])
         
-        logger.info(f"分类状态: 已分类 {classified_count} 个，未分类 {unclassified_count} 个")
+        logger.info(f"分类状态检查: 已分类 {classified_count} 个，未分类 {unclassified_count} 个")
         
-        # 只对未分类的仪表使用LLM分类
-        if unclassified_count > 0 and use_llm:
-            logger.info(f"使用LLM对 {unclassified_count} 个未分类仪表进行分类...")
-            
-            unclassified_mask = df['仪表类型'] == "未分类"
-            unclassified_df = df[unclassified_mask].copy()
+        # 关键逻辑：如果有表格分类，所有仪表都应该已经分类，直接返回
+        if classified_count > 0 and unclassified_count == 0:
+            logger.info("✅ 表格已有完整分类，无需LLM补充分类")
+            classified_data = {
+                "columns": list(df.columns),
+                "data": df.to_dict('records'),
+                "row_count": len(df)
+            }
+            return {
+                "success": True,
+                "classified_data": classified_data,
+                "message": f"表格分类完整: 共 {classified_count} 个仪表已分类"
+            }
+        
+        # 只有当所有仪表都未分类时，才使用LLM分类（表格没有分类标题的情况）
+        if unclassified_count == len(df) and use_llm:
+            logger.info(f"🤖 表格无分类标题，使用LLM对 {unclassified_count} 个仪表进行智能分类...")
             
             # 准备LLM分类的数据
-            models = unclassified_df['型号'].tolist()
-            specs = unclassified_df.get('规格', [''] * len(models)).tolist()
-            contexts = unclassified_df.get('备注', [''] * len(models)).tolist()
+            models = df['型号'].tolist()
+            specs = df.get('规格', [''] * len(models)).tolist()
+            contexts = df.get('备注', [''] * len(models)).tolist()
             
             # 使用LLM逐个分类
             llm_classifications = []
-            for model, spec, context in zip(models, specs, contexts):
+            for i, (model, spec, context) in enumerate(zip(models, specs, contexts)):
+                if i % 10 == 0:  # 进度提示
+                    logger.info(f"LLM分类进度: {i+1}/{len(models)}")
+                
                 classification = classify_instrument_type(
                     model=model,
                     spec=spec,
                     context=context,
                     row_index=-1,  # 不使用表格位置信息
-                    table_categories=None,  # 表格分类已经在parse阶段完成
+                    table_categories=None,  # 表格没有分类
                     use_llm=True
                 )
                 llm_classifications.append(classification)
         
-            # 更新未分类项的分类结果
-            df.loc[unclassified_mask, '仪表类型'] = llm_classifications
+            # 更新分类结果
+            df['仪表类型'] = llm_classifications
             
             # 统计LLM分类的效果
-            newly_classified = len([c for c in llm_classifications if c != "无法识别"])
-            logger.info(f"LLM成功分类了 {newly_classified} 个仪表")
+            successfully_classified = len([c for c in llm_classifications if c not in ["未分类", "无法识别"]])
+            unrecognized_count = len([c for c in llm_classifications if c == "无法识别"])
+            
+            logger.info(f"✅ LLM分类完成: 成功分类 {successfully_classified} 个，无法识别 {unrecognized_count} 个")
+            
+            message = f"LLM智能分类: 成功分类 {successfully_classified} 个，无法识别 {unrecognized_count} 个"
         
-        # 最终统计
-        final_classified = len(df[~df['仪表类型'].isin(["未分类", "无法识别"])])
-        final_unclassified = len(df[df['仪表类型'].isin(["未分类", "无法识别"])])
+        elif unclassified_count > 0 and classified_count > 0:
+            # 异常情况：部分分类部分未分类，理论上不应该发生
+            logger.warning(f"⚠️ 异常分类状态: {classified_count} 个已分类，{unclassified_count} 个未分类")
+            message = f"分类状态异常: {classified_count} 个已分类，{unclassified_count} 个未分类"
+        
+        else:
+            # 不使用LLM或其他情况
+            message = f"保持原有分类状态: {classified_count} 个已分类，{unclassified_count} 个未分类"
         
         # 转换为字典格式
         classified_data = {
@@ -197,11 +224,6 @@ def classify_instrument_types(parsed_data: Dict, use_llm: bool = True) -> Dict[s
             "row_count": len(df)
         }
         
-        message = f"分类完成: 表格分类 {classified_count} 个"
-        if unclassified_count > 0 and use_llm:
-            message += f", LLM补充分类 {newly_classified} 个"
-        message += f", 最终已分类 {final_classified} 个, 未分类 {final_unclassified} 个"
-        
         return {
             "success": True,
             "classified_data": classified_data,
@@ -209,11 +231,11 @@ def classify_instrument_types(parsed_data: Dict, use_llm: bool = True) -> Dict[s
         }
         
     except Exception as e:
-        logger.error(f"补充分类仪表类型失败: {str(e)}")
+        logger.error(f"分类处理失败: {str(e)}")
         return {
             "success": False,
             "classified_data": None,
-            "message": f"补充分类仪表类型失败: {str(e)}"
+            "message": f"分类处理失败: {str(e)}"
         }
 
 @tool
@@ -266,7 +288,7 @@ def summarize_instrument_statistics(classified_data: Dict) -> Dict[str, Any]:
 @tool
 def match_installation_standards(statistics_info: Dict) -> Dict[str, Any]:
     """
-    匹配仪表安装规范
+    匹配仪表安装规范（自动跳过无法识别和未分类的仪表）
     
     Args:
         statistics_info: 统计信息字典
@@ -280,23 +302,47 @@ def match_installation_standards(statistics_info: Dict) -> Dict[str, Any]:
         
         retriever = get_retriever()
         standard_clauses = {}
+        skipped_types = []
         
         # 为每种仪表类型检索相关规范
         for instrument_type, count in statistics_info['type_distribution'].items():
-            if count > 0 and instrument_type != "未知":
-                try:
-                    # 获取综合规范信息
-                    comprehensive_info = retriever.get_comprehensive_standards(instrument_type)
-                    standard_clauses[instrument_type] = comprehensive_info
-                    
-                except Exception as e:
-                    logger.warning(f"获取 {instrument_type} 规范失败: {str(e)}")
-                    continue
+            # 跳过无效分类
+            if count <= 0:
+                continue
+                
+            # 跳过无法识别和未分类的仪表（这些不需要匹配标准）
+            if instrument_type in ["未知", "未分类", "无法识别"]:
+                skipped_types.append((instrument_type, count))
+                logger.info(f"⏭️ 跳过 {instrument_type} 仪表 {count} 台（无需匹配标准）")
+                continue
+                
+            try:
+                # 获取综合规范信息
+                logger.info(f"🔍 正在匹配 {instrument_type} 安装规范...")
+                comprehensive_info = retriever.get_comprehensive_standards(instrument_type)
+                standard_clauses[instrument_type] = comprehensive_info
+                logger.info(f"✅ 成功匹配 {instrument_type} 规范")
+                
+            except Exception as e:
+                logger.warning(f"❌ 获取 {instrument_type} 规范失败: {str(e)}")
+                continue
+        
+        # 构建结果消息
+        message_parts = []
+        if standard_clauses:
+            message_parts.append(f"成功匹配 {len(standard_clauses)} 种仪表的安装规范")
+        
+        if skipped_types:
+            skipped_count = sum(count for _, count in skipped_types)
+            skipped_types_str = ", ".join([f"{t}({c}台)" for t, c in skipped_types])
+            message_parts.append(f"跳过 {skipped_count} 台仪表: {skipped_types_str}")
+        
+        message = "; ".join(message_parts) if message_parts else "未找到需要匹配标准的仪表"
         
         return {
             "success": True,
             "standard_clauses": standard_clauses,
-            "message": f"成功匹配 {len(standard_clauses)} 种仪表的安装规范"
+            "message": message
         }
         
     except Exception as e:
@@ -329,14 +375,19 @@ def generate_installation_recommendations(summary_data: Dict, statistics_info: D
         # 重建DataFrame
         summary_df = pd.DataFrame(summary_data["data"])
         
-        # 为主要仪表类型生成详细推荐
-        top_types = summary_df.groupby('仪表类型')['数量总和'].sum().sort_values(ascending=False).head(3)
+        # 为主要仪表类型生成详细推荐（跳过无法识别和未分类的仪表）
+        # 过滤掉无效类型
+        valid_df = summary_df[~summary_df['仪表类型'].isin(["未知", "未分类", "无法识别"])]
         
-        for instrument_type, total_qty in top_types.items():
-            if instrument_type != "未知":
+        if len(valid_df) > 0:
+            top_types = valid_df.groupby('仪表类型')['数量总和'].sum().sort_values(ascending=False).head(3)
+            
+            for instrument_type, total_qty in top_types.items():
                 try:
+                    logger.info(f"🔧 正在生成 {instrument_type} 安装推荐...")
+                    
                     # 获取该类型的典型型号
-                    type_data = summary_df[summary_df['仪表类型'] == instrument_type]
+                    type_data = valid_df[valid_df['仪表类型'] == instrument_type]
                     main_model = type_data.iloc[0]['型号'] if not type_data.empty else ""
                     
                     # 生成推荐
@@ -349,10 +400,13 @@ def generate_installation_recommendations(summary_data: Dict, statistics_info: D
                     )
                     
                     recommendations[instrument_type] = recommendation
+                    logger.info(f"✅ 成功生成 {instrument_type} 推荐")
                     
                 except Exception as e:
-                    logger.warning(f"生成 {instrument_type} 推荐失败: {str(e)}")
+                    logger.warning(f"❌ 生成 {instrument_type} 推荐失败: {str(e)}")
                     continue
+        else:
+            logger.warning("⚠️ 没有有效分类的仪表，无法生成具体推荐")
         
         # 生成批量安装建议
         if statistics_info:

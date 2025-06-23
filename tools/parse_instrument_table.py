@@ -147,23 +147,32 @@ def find_category_sections(df: pd.DataFrame) -> List[Tuple[str, int, int]]:
             
         logger.debug(f"检查第{idx+1}行: {row_text_clean}")
         
-        # 精确匹配中文数字分类标题（一：、二：、三：等）
+        # 精确匹配中文数字分类标题（支持多种标点符号：、：、.等）
         chinese_num_patterns = [
-            (r'^一[：:\s]+(.+)', '一'),
-            (r'^二[：:\s]+(.+)', '二'),
-            (r'^三[：:\s]+(.+)', '三'),
-            (r'^四[：:\s]+(.+)', '四'),
-            (r'^五[：:\s]+(.+)', '五'),
-            (r'^六[：:\s]+(.+)', '六'),
-            (r'^七[：:\s]+(.+)', '七'),
-            (r'^八[：:\s]+(.+)', '八'),
-            (r'^九[：:\s]+(.+)', '九'),
-            (r'^十[：:\s]+(.+)', '十')
+            (r'^一[：:\s\.\,\、\.]+(.+)', '一'),
+            (r'^二[：:\s\.\,\、\.]+(.+)', '二'),
+            (r'^三[：:\s\.\,\、\.]+(.+)', '三'),
+            (r'^四[：:\s\.\,\、\.]+(.+)', '四'),
+            (r'^五[：:\s\.\,\、\.]+(.+)', '五'),
+            (r'^六[：:\s\.\,\、\.]+(.+)', '六'),
+            (r'^七[：:\s\.\,\、\.]+(.+)', '七'),
+            (r'^八[：:\s\.\,\、\.]+(.+)', '八'),
+            (r'^九[：:\s\.\,\、\.]+(.+)', '九'),
+            (r'^十[：:\s\.\,\、\.]+(.+)', '十')
         ]
         
-        # 匹配特殊情况：只有"六"而没有冒号的分类
+        # 匹配特殊情况：紧跟分类名的情况
         special_patterns = [
-            (r'^六\s+(.+)', '六')
+            (r'^一、(.+)', '一'),
+            (r'^二、(.+)', '二'),
+            (r'^三、(.+)', '三'),
+            (r'^四、(.+)', '四'),
+            (r'^五、(.+)', '五'),
+            (r'^六、(.+)', '六'),
+            (r'^七、(.+)', '七'),
+            (r'^八、(.+)', '八'),
+            (r'^九、(.+)', '九'),
+            (r'^十、(.+)', '十')
         ]
         
         # 组合所有模式
@@ -178,23 +187,24 @@ def find_category_sections(df: pd.DataFrame) -> List[Tuple[str, int, int]]:
                 
                 # 进一步验证：确保这真的是分类标题
                 # 1. 分类名称不能太长
-                if len(category_name) > 30:
+                if len(category_name) > 50:  # 放宽长度限制
                     continue
                     
-                # 2. 不能包含明显的技术参数
-                tech_params = ['MPa', '级', '℃', '°C', 'mm', 'Ф', 'DN', 'PN', 'x', '×', '%']
+                # 2. 不能包含明显的技术参数（放宽限制）
+                tech_params = ['MPa', '级', '℃', '°C', 'mm', 'Ф', 'DN', 'PN']
                 if any(param in category_name for param in tech_params):
                     continue
                 
-                # 3. 不能包含复杂符号
-                complex_chars = ['/', '（', '）', '(', ')', '=', '-', '+']
+                # 3. 不能包含复杂符号（允许括号，因为分类中可能包含）
+                complex_chars = ['=']
                 if any(char in category_name for char in complex_chars):
                     continue
                 
-                # 4. 应该包含仪表相关词汇（对于明确的数字分类可以放宽）
-                instrument_keywords = ['仪表', '设备', '系统', '控制', '装置', '变送器', '传感器', '计', '表', '阀', '箱', '门']
+                # 4. 应该包含仪表相关词汇（放宽要求，支持更多类型）
+                instrument_keywords = ['仪表', '设备', '系统', '控制', '装置', '变送器', '传感器', '计', '表', '阀', '箱', '门', '风门', '头', '分析']
                 if not any(keyword in category_name for keyword in instrument_keywords):
-                    continue
+                    # 对于明确的数字分类，即使不包含关键词也可能是有效分类
+                    logger.warning(f"分类 '{category_name}' 不包含仪表关键词，但继续处理")
                 
                 sections.append((category_name, idx, -1))  # -1表示结束行待确定
                 logger.info(f"✅ 找到分类标题: {num_char}：{category_name} 在第{idx+1}行")
@@ -379,8 +389,12 @@ def extract_and_parse_instrument_table(df: pd.DataFrame) -> pd.DataFrame:
         
         tag_str = str(tag_value).strip()
         
-        # 排除分类标题行（如"一："、"二："、"三："等）
-        if re.match(r'^[一二三四五六七八九十\d+][:：\s]*$', tag_str):
+        # 排除分类标题行（如"一："、"二："、"三："、"一、"等）
+        if re.match(r'^[一二三四五六七八九十\d+][:：\s\.\,\、\.]*$', tag_str):
+            return False
+        
+        # 排除完整的分类标题行（如"一、温度仪表"）
+        if re.match(r'^[一二三四五六七八九十\d+][：:\s\.\,\、\.、]+.+', tag_str):
             return False
         
         # 排除说明行
