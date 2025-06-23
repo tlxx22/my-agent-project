@@ -92,15 +92,16 @@ def extract_excel_tables(file_path: str, keyword: str = "仪表清单") -> List[
             logger.info(f"正在处理工作表: {sheet_name}")
             
             try:
-                # 读取当前sheet - 使用两种方式获取准确行数
-                df_for_count = pd.read_excel(xl_file, sheet_name=sheet_name)  # 默认读取获取行数
-                original_row_count = len(df_for_count)  # 使用默认读取的行数
-                
+                # 读取当前sheet - 获取准确的原始行数
                 df_original = pd.read_excel(xl_file, sheet_name=sheet_name, header=None)
                 
+                # 计算原始行数（去除完全空行）
+                df_for_count = df_original.dropna(how='all')
+                original_row_count = len(df_for_count)
+                            
                 # 清理空行空列
                 df = df_original.dropna(how='all').dropna(axis=1, how='all')
-                
+                            
                 if df.empty:
                     logger.info(f"工作表 {sheet_name} 为空，跳过")
                     continue
@@ -162,9 +163,11 @@ def _process_any_table(xl_file, sheet_name: str, df: pd.DataFrame, original_row_
             table_df = table_df.dropna(how='all')
             
             if not table_df.empty:
+                # 使用实际处理后的行数
+                actual_row_count = len(table_df)
                 return {
                     'name': sheet_name,
-                    'description': f'包含{original_row_count}行数据的仪表表格',
+                    'description': f'包含{actual_row_count}行数据的仪表表格',
                     'sheet_name': sheet_name,
                     'headers': list(table_df.columns),
                     'data': table_df,
@@ -173,9 +176,10 @@ def _process_any_table(xl_file, sheet_name: str, df: pd.DataFrame, original_row_
         else:
             # 其他类型表格：直接使用原始数据
             logger.info(f"工作表 {sheet_name} 未找到仪表标题行，作为普通表格处理")
+            actual_row_count = len(df)
             return {
                 'name': sheet_name,
-                'description': f'包含{original_row_count}行数据的表格',
+                'description': f'包含{actual_row_count}行数据的表格',
                 'sheet_name': sheet_name,
                 'headers': [f'Column_{i}' for i in range(len(df.columns))],
                 'data': df,

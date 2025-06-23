@@ -38,62 +38,121 @@ class InstrumentTypeClassifier:
     
     def analyze_documents_with_llm(self, documents: List[str]) -> Dict[str, Dict]:
         """
-        使用智能分析识别文档中的主要仪表类型
+        使用LLM智能识别文档中的仪表类型（二级分类结构）
         
         Args:
             documents: 文档文本列表
         
         Returns:
-            识别出的仪表类型字典
+            识别出的仪表类型字典（包含大分类和具体仪表的层次结构）
         """
-        logger.info("🤖 启动智能识别仪表类型...")
+        logger.info("🤖 启动LLM智能识别仪表类型（二级分类）...")
         logger.info(f"📚 分析文档数量: {len(documents)} 个文档块")
         
-        # 合并所有文档文本进行分析（不限制数量）
-        combined_text = "\n".join(documents)  # 分析所有文档块
+        # 合并所有文档文本进行分析
+        combined_text = "\n".join(documents)
         
-        # 设计LLM分析prompt
+        # 设计增强的二级分类LLM prompt
         analysis_prompt = f"""
-请分析以下仪表安装规范文档，识别出文档中提到的**具体仪表类型**。
+请分析以下仪表安装规范文档，识别出文档中提到的**具体仪表类型**，并按照二级分类结构组织。
 
-要求：
-1. 只识别具体的仪表设备名称，如"热电偶"、"压力变送器"、"电磁流量计"等
-2. **排除通用词汇**，如"仪表"、"设备"、"装置"等
-3. 每种仪表类型需要在文档中出现至少3次
-4. 优先识别完整的仪表名称（如"电磁流量计"而不是"流量计"）
-5. 返回JSON格式，包含仪表类型、出现频次、所属类别
+## 分类要求：
+1. **大分类**：温度仪表、压力仪表、流量仪表、液位仪表、控制设备、电气设备、分析仪表等
+2. **具体仪表**：每个具体仪表都必须标明所属的大分类
+3. **只识别具体设备名称**，排除"仪表"、"设备"等通用词汇
+4. **每种仪表在文档中应该有实际提及**
 
-文档内容：
+## 示例格式：
+```
+热电偶 (type: 温度仪表)
+热电阻 (type: 温度仪表)  
+双金属温度计 (type: 温度仪表)
+压力变送器 (type: 压力仪表)
+差压变送器 (type: 压力仪表)
+电磁流量计 (type: 流量仪表)
+涡轮流量计 (type: 流量仪表)
+磁翻板液位计 (type: 液位仪表)
+浮球液位计 (type: 液位仪表)
+调节阀 (type: 控制设备)
+电动执行机构 (type: 控制设备)
+配电箱 (type: 电气设备)
+控制柜 (type: 电气设备)
+PH计 (type: 分析仪表)
+溶氧仪 (type: 分析仪表)
+```
+
+## 文档内容：
 {combined_text}
 
-请以JSON格式返回，格式如下：
+## 请以JSON格式返回，结构如下：
+```json
 {{
-    "instrument_types": {{
-        "热电偶": {{
-            "category": "温度",
-            "frequency": 15,
-            "description": "用于温度测量的传感器"
+    "instrument_categories": {{
+        "温度仪表": {{
+            "description": "用于温度测量和控制的仪表设备",
+            "instruments": {{
+                "热电偶": {{
+                    "frequency": 15,
+                    "description": "用于高温测量的温度传感器",
+                    "typical_models": ["WRN-630", "K型热电偶"],
+                    "main_applications": ["锅炉温度", "管道温度"]
+                }},
+                "热电阻": {{
+                    "frequency": 12,
+                    "description": "用于中低温测量的温度传感器", 
+                    "typical_models": ["WZP-630", "Pt100"],
+                    "main_applications": ["给水温度", "环境温度"]
+                }}
+            }}
         }},
-        "压力变送器": {{
-            "category": "压力", 
-            "frequency": 12,
-            "description": "用于压力信号变送的仪表"
+        "压力仪表": {{
+            "description": "用于压力测量和控制的仪表设备",
+            "instruments": {{
+                "压力变送器": {{
+                    "frequency": 20,
+                    "description": "将压力信号转换为标准信号的设备",
+                    "typical_models": ["EJA430A", "3051"],
+                    "main_applications": ["管道压力监测", "容器压力控制"]
+                }},
+                "差压变送器": {{
+                    "frequency": 8,
+                    "description": "测量两点间压力差的变送器",
+                    "typical_models": ["EJA110A", "3051DP"],
+                    "main_applications": ["流量测量", "液位测量"]
+                }}
+            }}
         }}
+    }},
+    "summary": {{
+        "total_categories": 6,
+        "total_instruments": 25,
+        "analysis_method": "llm_hierarchical_analysis"
     }}
 }}
+```
+
+注意：
+- 识别尽可能多的具体仪表类型
+- 每个仪表都要归类到合适的大分类下
+- 提供典型型号和主要应用场景
+- 估算在文档中的出现频次
 """
         
         try:
-            # 尝试使用LLM进行分析
+            # 调用LLM进行二级分类分析
             result = self._call_llm_for_analysis(analysis_prompt)
             
-            if result and "instrument_types" in result:
-                logger.info(f"✅ LLM成功识别了 {len(result['instrument_types'])} 种仪表类型")
+            if result and "instrument_categories" in result:
+                # 转换为扁平化的格式，便于后续处理
+                flattened_types = self._flatten_hierarchical_results(result['instrument_categories'])
                 
-                # 验证和过滤结果
-                filtered_types = self._filter_and_validate_types(result['instrument_types'], documents)
+                logger.info(f"✅ LLM成功识别了 {len(flattened_types)} 种具体仪表类型")
+                logger.info(f"📊 覆盖了 {len(result['instrument_categories'])} 个大分类")
                 
-                return filtered_types
+                # 显示识别结果概览
+                self._display_hierarchical_results(result['instrument_categories'])
+                
+                return flattened_types
             else:
                 logger.warning("⚠️ LLM分析结果格式不正确，无法识别仪表类型")
                 return {}
@@ -183,67 +242,95 @@ class InstrumentTypeClassifier:
             'instrument_types': {}
         }
     
-    def _filter_and_validate_types(self, types_dict: Dict, documents: List[str]) -> Dict:
+    def _flatten_hierarchical_results(self, categories: Dict) -> Dict[str, Dict]:
         """
-        过滤LLM识别的仪表类型（只过滤通用词汇，直接接受LLM结果）
+        将层次化结果转换为扁平化格式，便于后续使用
         
         Args:
-            types_dict: LLM识别的仪表类型字典
-            documents: 原始文档列表（不再使用）
+            categories: 层次化的分类结果
         
         Returns:
-            过滤后的仪表类型字典
+            扁平化的仪表类型字典，格式: "仪表名称 (type: 大分类)"
         """
-        filtered_types = {}
+        flattened = {}
         
-        # 通用词汇黑名单
-        blacklist = {
-            '仪表', '设备', '装置', '器件', '元件', '部件', '系统', '控制', 
-            '测量', '检测', '监测', '传感', '执行', '调节', '安装', '配置'
-        }
-        
-        for instrument_name, info in types_dict.items():
-            # 只过滤通用词汇，其他全部接受
-            if instrument_name.lower() in blacklist:
-                logger.info(f"🚫 过滤通用词汇: {instrument_name}")
-                continue
+        for category_name, category_info in categories.items():
+            instruments = category_info.get('instruments', {})
             
-            # 直接接受LLM识别的结果，不进行任何频次检查
-            filtered_types[instrument_name] = {
-                'category': info.get('category', '其他'),
-                'frequency': info.get('frequency', 1),  # 使用LLM估计的频次
-                'description': info.get('description', ''),
-                'llm_confidence': info.get('frequency', 0)  # LLM估计的频次
-            }
-            logger.info(f"✅ 接受LLM识别: {instrument_name} (类别: {info.get('category', '其他')})")
+            for instrument_name, instrument_info in instruments.items():
+                # 创建包含类型信息的键名
+                full_name = f"{instrument_name} (type: {category_name})"
+                
+                flattened[full_name] = {
+                    'category': category_name,
+                    'instrument_name': instrument_name,
+                    'frequency': instrument_info.get('frequency', 1),
+                    'description': instrument_info.get('description', ''),
+                    'typical_models': instrument_info.get('typical_models', []),
+                    'main_applications': instrument_info.get('main_applications', []),
+                    'llm_confidence': instrument_info.get('frequency', 0)
+                }
         
-        return filtered_types
+        return flattened
+    
+    def _display_hierarchical_results(self, categories: Dict):
+        """
+        显示层次化识别结果
+        
+        Args:
+            categories: 层次化的分类结果
+        """
+        print(f"\n🎯 LLM识别的仪表类型（二级分类）:")
+        print("=" * 60)
+        
+        for category_name, category_info in categories.items():
+            instruments = category_info.get('instruments', {})
+            print(f"\n📂 {category_name} ({len(instruments)}种仪表)")
+            print(f"   📝 {category_info.get('description', '')}")
+            
+            for instrument_name, instrument_info in instruments.items():
+                frequency = instrument_info.get('frequency', 0)
+                models = instrument_info.get('typical_models', [])
+                models_str = f" | 型号: {', '.join(models[:2])}" if models else ""
+                print(f"   • {instrument_name} (频次: {frequency}){models_str}")
+        
+        total_instruments = sum(len(cat.get('instruments', {})) for cat in categories.values())
+        print(f"\n📊 总计: {len(categories)}个大分类, {total_instruments}种具体仪表")
+        print("=" * 60)
     
     def save_classification_results(self, types_dict: Dict, save_path: str = "./data/llm_instrument_types.json"):
         """
-        保存LLM识别的仪表类型结果
+        保存LLM识别的仪表类型结果（支持层次化结构）
         
         Args:
-            types_dict: 识别结果字典
+            types_dict: 识别结果字典（扁平化格式）
             save_path: 保存路径
         """
         try:
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             
-            # 添加元数据
+            # 添加元数据和统计信息
+            categories = set()
+            for instrument_key, instrument_info in types_dict.items():
+                categories.add(instrument_info.get('category', '其他'))
+            
             result_data = {
                 'instrument_types': types_dict,
                 'metadata': {
                     'total_types': len(types_dict),
+                    'total_categories': len(categories),
+                    'categories': list(categories),
                     'generation_time': str(datetime.now()),
-                    'method': 'llm_analysis'
+                    'method': 'llm_hierarchical_analysis',
+                    'format_explanation': '仪表名称格式: "具体仪表 (type: 大分类)"'
                 }
             }
             
             with open(save_path, 'w', encoding='utf-8') as f:
                 json.dump(result_data, f, ensure_ascii=False, indent=2)
             
-            logger.info(f"📁 仪表类型识别结果已保存到: {save_path}")
+            logger.info(f"📁 层次化仪表类型识别结果已保存到: {save_path}")
+            logger.info(f"📊 总计: {len(categories)}个大分类, {len(types_dict)}种具体仪表")
             
         except Exception as e:
             logger.error(f"保存识别结果失败: {str(e)}")

@@ -1,45 +1,256 @@
 {
   "instrument_types": {
-    "热电偶": {
-      "category": "温度",
-      "frequency": 15,
-      "description": "用于温度测量的传感器",
-      "llm_confidence": 15
+    "热电偶 (type: 温度仪表)": {
+      "category": "温度仪表",
+      "instrument_name": "热电偶",
+      "frequency": 3,
+      "description": "用于高温测量的温度传感器",
+      "typical_models": [
+        "WRN-630",
+        "K型热电偶"
+      ],
+      "main_applications": [
+        "锅炉温度",
+        "管道温度"
+      ],
+      "llm_confidence": 3
     },
-    "压力变送器": {
-      "category": "压力",
-      "frequency": 12,
-      "description": "用于压力信号变送的仪表",
-      "llm_confidence": 12
+    "热电阻 (type: 温度仪表)": {
+      "category": "温度仪表",
+      "instrument_name": "热电阻",
+      "frequency": 2,
+      "description": "用于中低温测量的温度传感器",
+      "typical_models": [
+        "WZP-630",
+        "Pt100"
+      ],
+      "main_applications": [
+        "给水温度",
+        "环境温度"
+      ],
+      "llm_confidence": 2
     },
-    "电磁流量计": {
-      "category": "流量",
-      "frequency": 10,
-      "description": "用于测量液体流量的仪表",
-      "llm_confidence": 10
+    "双金属温度计 (type: 温度仪表)": {
+      "category": "温度仪表",
+      "instrument_name": "双金属温度计",
+      "frequency": 1,
+      "description": "用于测量气体和液体温度的机械式仪表",
+      "typical_models": [
+        "Bimetallic Thermometer"
+      ],
+      "main_applications": [
+        "工业设备温度监测"
+      ],
+      "llm_confidence": 1
     },
-    "涡轮流量计": {
-      "category": "流量",
-      "frequency": 8,
-      "description": "用于测量液体流量的仪表",
-      "llm_confidence": 8
-    },
-    "浮球液位计": {
-      "category": "物位",
-      "frequency": 6,
-      "description": "用于测量液体物位的仪表",
-      "llm_confidence": 6
-    },
-    "差压变送器": {
-      "category": "压力",
+    "压力变送器 (type: 压力仪表)": {
+      "category": "压力仪表",
+      "instrument_name": "压力变送器",
       "frequency": 5,
-      "description": "用于差压测量的仪表",
+      "description": "将压力信号转换为标准信号的设备",
+      "typical_models": [
+        "EJA430A",
+        "3051"
+      ],
+      "main_applications": [
+        "管道压力监测",
+        "容器压力控制"
+      ],
       "llm_confidence": 5
+    },
+    "差压变送器 (type: 压力仪表)": {
+      "category": "压力仪表",
+      "instrument_name": "差压变送器",
+      "frequency": 4,
+      "description": "测量两点间压力差的变送器",
+      "typical_models": [
+        "EJA110A",
+        "3051DP"
+      ],
+      "main_applications": [
+        "流量测量",
+        "液位测量"
+      ],
+      "llm_confidence": 4
+    },
+    "压力表 (type: 压力仪表)": {
+      "category": "压力仪表",
+      "instrument_name": "压力表",
+      "frequency": 3,
+      "description": "用于直接显示压力值的仪表",
+      "typical_models": [
+        "Bourdon Pressure Gauge"
+      ],
+      "main_applications": [
+        "液体和气体压力监测"
+      ],
+      "llm_confidence": 3
+    },
+    "电磁流量计 (type: 流量仪表)": {
+      "category": "流量仪表",
+      "instrument_name": "电磁流量计",
+      "frequency": 3,
+      "description": "用于测量导电液体流量的仪表",
+      "typical_models": [
+        "Magmeter 3000"
+      ],
+      "main_applications": [
+        "污水处理",
+        "化工流量监测"
+      ],
+      "llm_confidence": 3
+    },
+    "涡轮流量计 (type: 流量仪表)": {
+      "category": "流量仪表",
+      "instrument_name": "涡轮流量计",
+      "frequency": 2,
+      "description": "用于测量液体流量的仪表",
+      "typical_models": [
+        "Turbine Flow Meter"
+      ],
+      "main_applications": [
+        "石油和化工行业"
+      ],
+      "llm_confidence": 2
+    },
+    "皮托管 (type: 流量仪表)": {
+      "category": "流量仪表",
+      "instrument_name": "皮托管",
+      "frequency": 1,
+      "description": "用于测量气体流速的仪器",
+      "typical_models": [
+        "Pitot Tube"
+      ],
+      "main_applications": [
+        "风速测量",
+        "气体流量监测"
+      ],
+      "llm_confidence": 1
+    },
+    "浮球液位计 (type: 液位仪表)": {
+      "category": "液位仪表",
+      "instrument_name": "浮球液位计",
+      "frequency": 2,
+      "description": "通过浮球原理测量液位的仪表",
+      "typical_models": [
+        "Float Level Switch"
+      ],
+      "main_applications": [
+        "水箱液位监测"
+      ],
+      "llm_confidence": 2
+    },
+    "磁翻板液位计 (type: 液位仪表)": {
+      "category": "液位仪表",
+      "instrument_name": "磁翻板液位计",
+      "frequency": 1,
+      "description": "通过浮球和磁性原理显示液位的仪表",
+      "typical_models": [
+        "Magnetic Float Level Gauge"
+      ],
+      "main_applications": [
+        "化工液位监测"
+      ],
+      "llm_confidence": 1
+    },
+    "调节阀 (type: 控制设备)": {
+      "category": "控制设备",
+      "instrument_name": "调节阀",
+      "frequency": 2,
+      "description": "用于控制流体流量的阀门",
+      "typical_models": [
+        "Control Valve"
+      ],
+      "main_applications": [
+        "流量调节",
+        "压力控制"
+      ],
+      "llm_confidence": 2
+    },
+    "电动执行机构 (type: 控制设备)": {
+      "category": "控制设备",
+      "instrument_name": "电动执行机构",
+      "frequency": 1,
+      "description": "用于自动控制阀门的电动装置",
+      "typical_models": [
+        "Electric Actuator"
+      ],
+      "main_applications": [
+        "自动化控制系统"
+      ],
+      "llm_confidence": 1
+    },
+    "PH计 (type: 分析仪表)": {
+      "category": "分析仪表",
+      "instrument_name": "PH计",
+      "frequency": 1,
+      "description": "用于测量液体酸碱度的仪表",
+      "typical_models": [
+        "PH Meter"
+      ],
+      "main_applications": [
+        "水质监测",
+        "化学分析"
+      ],
+      "llm_confidence": 1
+    },
+    "溶氧仪 (type: 分析仪表)": {
+      "category": "分析仪表",
+      "instrument_name": "溶氧仪",
+      "frequency": 1,
+      "description": "用于测量水中溶解氧含量的仪表",
+      "typical_models": [
+        "Dissolved Oxygen Meter"
+      ],
+      "main_applications": [
+        "水处理",
+        "环境监测"
+      ],
+      "llm_confidence": 1
+    },
+    "配电箱 (type: 电气设备)": {
+      "category": "电气设备",
+      "instrument_name": "配电箱",
+      "frequency": 2,
+      "description": "用于电力分配的箱体",
+      "typical_models": [
+        "Distribution Box"
+      ],
+      "main_applications": [
+        "电力分配",
+        "电气控制"
+      ],
+      "llm_confidence": 2
+    },
+    "控制柜 (type: 电气设备)": {
+      "category": "电气设备",
+      "instrument_name": "控制柜",
+      "frequency": 1,
+      "description": "用于集中控制电气设备的柜体",
+      "typical_models": [
+        "Control Cabinet"
+      ],
+      "main_applications": [
+        "自动化控制",
+        "电气管理"
+      ],
+      "llm_confidence": 1
     }
   },
   "metadata": {
-    "total_types": 6,
-    "generation_time": "2025-06-23 18:42:41.068175",
-    "method": "llm_analysis"
+    "total_types": 17,
+    "total_categories": 7,
+    "categories": [
+      "流量仪表",
+      "温度仪表",
+      "液位仪表",
+      "压力仪表",
+      "分析仪表",
+      "电气设备",
+      "控制设备"
+    ],
+    "generation_time": "2025-06-23 19:26:55.444015",
+    "method": "llm_hierarchical_analysis",
+    "format_explanation": "仪表名称格式: \"具体仪表 (type: 大分类)\""
   }
 }

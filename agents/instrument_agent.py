@@ -1176,8 +1176,8 @@ def ask_user_approval(state: InstrumentAgentState) -> InstrumentAgentState:
             logger.warning(f"无法解析授权决定 '{user_input}'，默认拒绝")
     else:
         # 没有用户输入，默认拒绝（安全第一）
-            state["user_approved_sensitive"] = False
-            logger.info("没有用户输入，默认拒绝敏感工具授权")
+        state["user_approved_sensitive"] = False
+        logger.info("没有用户输入，默认拒绝敏感工具授权")
     
     return state
 
