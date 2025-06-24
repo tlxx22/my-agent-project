@@ -12,7 +12,7 @@ from .extract_excel_tables import extract_excel_tables as _extract_excel_tables
 from .parse_instrument_table import extract_instrument_info as _extract_instrument_info, validate_parsed_data
 from .classify_instrument_type import classify_instrument_type
 from .summarize_statistics import summarize_statistics as _summarize_statistics, generate_summary_report, get_summary_statistics
-from .match_standard_clause import StandardClauseRetriever
+from .enhanced_rag_retriever import EnhancedRAGRetriever
 from .generate_installation_recommendation import InstallationRecommendationGenerator
 
 logger = logging.getLogger(__name__)
@@ -22,10 +22,11 @@ _retriever = None
 _recommendation_generator = None
 
 def get_retriever():
-    """获取检索器实例"""
+    """获取增强检索器实例"""
     global _retriever
     if _retriever is None:
-        _retriever = StandardClauseRetriever()
+        _retriever = EnhancedRAGRetriever()
+        logger.info("🚀 LangGraph工具集已切换为增强检索器")
     return _retriever
 
 def get_recommendation_generator():

@@ -110,24 +110,22 @@ LangGraph智能体包含以下节点和工作流：
 
 ```mermaid
 graph TD;
-	__start__([<p>__start__</p>]):::first
+	__start__(<p>__start__</p>)
 	fetch_user_context(fetch_user_context)
 	llm_task_planner(llm_task_planner)
-	ask_user_confirm_tasks(ask_user_confirm_tasks)
+	ask_user_confirm_tasks(ask_user_confirm_tasks<hr/><small><em>__interrupt = before</em></small>)
 	task_router(task_router)
 	enter_upload_file(enter_upload_file)
 	error_no_file_or_format(error_no_file_or_format)
 	extract_excel_tables(extract_excel_tables)
+	llm_smart_table_selection(llm_smart_table_selection)
 	clarify_table_choice(clarify_table_choice<hr/><small><em>__interrupt = before</em></small>)
 	parse_instrument_table(parse_instrument_table)
 	classify_instrument_type(classify_instrument_type)
 	ask_user_confirm_type(ask_user_confirm_type<hr/><small><em>__interrupt = before</em></small>)
 	summarize_statistics(summarize_statistics)
-	validate_recommendation_types(validate_recommendation_types)
-	ask_user_select_type(ask_user_select_type<hr/><small><em>__interrupt = before</em></small>)
 	check_user_intent(check_user_intent)
 	respond_statistics(respond_statistics)
-	display_existing_statistics(display_existing_statistics)
 	match_standard_clause(match_standard_clause)
 	standards_gateway(standards_gateway)
 	respond_stats_with_note(respond_stats_with_note)
@@ -139,8 +137,7 @@ graph TD;
 	feedback_loop_gateway(feedback_loop_gateway)
 	advance_task_index(advance_task_index)
 	error_handler(error_handler)
-	intent_gateway_node(intent_gateway_node)
-	__end__([<p>__end__</p>]):::last
+	__end__(<p>__end__</p>)
 	__start__ --> fetch_user_context;
 	advance_task_index -. &nbsp;all_done&nbsp; .-> __end__;
 	advance_task_index -. &nbsp;need_file_processing&nbsp; .-> enter_upload_file;
@@ -149,23 +146,19 @@ graph TD;
 	ask_user_approval -. &nbsp;approved&nbsp; .-> spec_sensitive_tools;
 	ask_user_confirm_tasks --> task_router;
 	ask_user_confirm_type --> classify_instrument_type;
-	ask_user_select_type --> validate_recommendation_types;
 	check_user_intent --> llm_task_planner;
 	clarify_table_choice --> parse_instrument_table;
 	classify_instrument_type -. &nbsp;yes&nbsp; .-> ask_user_confirm_type;
 	classify_instrument_type -. &nbsp;no&nbsp; .-> summarize_statistics;
-	display_existing_statistics --> feedback_loop_gateway;
 	enter_upload_file -. &nbsp;no&nbsp; .-> error_no_file_or_format;
 	enter_upload_file -. &nbsp;yes&nbsp; .-> extract_excel_tables;
-	extract_excel_tables -. &nbsp;user_select&nbsp; .-> clarify_table_choice;
+	extract_excel_tables -. &nbsp;yes&nbsp; .-> clarify_table_choice;
 	extract_excel_tables -. &nbsp;error&nbsp; .-> error_handler;
-	extract_excel_tables -. &nbsp;single&nbsp; .-> parse_instrument_table;
+	extract_excel_tables -. &nbsp;no&nbsp; .-> parse_instrument_table;
 	feedback_loop_gateway -. &nbsp;finish&nbsp; .-> advance_task_index;
 	feedback_loop_gateway -. &nbsp;modify&nbsp; .-> summarize_statistics;
 	fetch_user_context --> check_user_intent;
 	generate_installation_reco --> respond_full_report;
-	intent_gateway_node -. &nbsp;reco&nbsp; .-> match_standard_clause;
-	intent_gateway_node -. &nbsp;stats&nbsp; .-> respond_statistics;
 	llm_task_planner -. &nbsp;yes&nbsp; .-> ask_user_confirm_tasks;
 	llm_task_planner -. &nbsp;no&nbsp; .-> task_router;
 	match_standard_clause -. &nbsp;error&nbsp; .-> error_handler;
@@ -179,18 +172,16 @@ graph TD;
 	spec_sensitive_tools --> generate_installation_reco;
 	standards_gateway -. &nbsp;yes&nbsp; .-> ask_user_approval;
 	standards_gateway -. &nbsp;no&nbsp; .-> respond_stats_with_note;
-	summarize_statistics --> validate_recommendation_types;
-	task_router -. &nbsp;display_stats&nbsp; .-> display_existing_statistics;
+	summarize_statistics -. &nbsp;reco&nbsp; .-> match_standard_clause;
+	summarize_statistics -. &nbsp;stats&nbsp; .-> respond_statistics;
 	task_router -. &nbsp;need_file&nbsp; .-> enter_upload_file;
-	task_router -. &nbsp;direct_reco&nbsp; .-> match_standard_clause;
-	task_router -. &nbsp;direct_stats&nbsp; .-> summarize_statistics;
-	validate_recommendation_types -. &nbsp;validate&nbsp; .-> ask_user_select_type;
-	validate_recommendation_types -. &nbsp;proceed&nbsp; .-> intent_gateway_node;
+	task_router -. &nbsp;direct_processing&nbsp; .-> summarize_statistics;
 	error_handler --> __end__;
 	error_no_file_or_format --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
 	classDef last fill:#bfb6fc
+
 
 ```
 

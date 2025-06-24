@@ -98,7 +98,7 @@ def extract_excel_tables(file_path: str, keyword: str = "仪表清单") -> List[
                 # 计算原始行数（去除完全空行）
                 df_for_count = df_original.dropna(how='all')
                 original_row_count = len(df_for_count)
-                            
+                        
                 # 清理空行空列
                 df = df_original.dropna(how='all').dropna(axis=1, how='all')
                             

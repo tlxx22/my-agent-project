@@ -195,10 +195,21 @@ def llm_task_planner(state: InstrumentAgentState) -> InstrumentAgentState:
         else:
             logger.info(f"使用已确定的用户意图: {state.get('user_intent')}")
         
-        # 4. 分析推荐目标（全部 vs 特定类型）
-        if "全部" in user_input or "所有" in user_input or ("统计" in user_input and "安装" in user_input):
-            state["recommendation_target"] = "全部"
-            logger.info("推荐目标设为：全部类型")
+        # 4. 从任务规划中提取推荐目标，不要用简单的关键词覆盖LLM的结果
+        recommendation_target = "全部"  # 默认值
+        
+        # 从LLM规划的任务中提取推荐目标
+        for task in state.get("planned_tasks", []):
+            if task.get("type") == "reco" and task.get("target"):
+                recommendation_target = task["target"]
+                logger.info(f"从LLM任务规划提取推荐目标: {recommendation_target}")
+                break
+            elif task.get("type") == "stats" and task.get("target") and task["target"] != "全部":
+                # 如果stats任务有特定目标，也用于推荐
+                recommendation_target = task["target"]
+                logger.info(f"从LLM统计任务提取推荐目标: {recommendation_target}")
+        
+        state["recommendation_target"] = recommendation_target
         
         # 5. 设置任务确认标志
         if len(state.get("planned_tasks", [])) > 1:
@@ -995,39 +1006,90 @@ def respond_statistics(state: InstrumentAgentState) -> InstrumentAgentState:
     return state
 
 def display_existing_statistics(state: InstrumentAgentState) -> InstrumentAgentState:
-    """显示已有统计结果 - stats任务专用"""
+    """显示已有统计结果 - stats任务专用，支持按类型过滤"""
     show_step(state, "显示统计结果")
     stats = state.get("instrument_statistics", {})
+    recommendation_target = state.get("recommendation_target", "全部")
     
-    # 直接显示统计结果给用户
-    print("\n📊 仪表统计结果:")
+    # 检查是否需要过滤特定仪表类型
+    if recommendation_target != "全部":
+        logger.info(f"📊 显示 {recommendation_target} 的统计信息")
+        print(f"\n📊 {recommendation_target}统计结果:")
+    else:
+        logger.info("📊 显示全部仪表统计信息")
+        print("\n📊 仪表统计结果:")
+    
     print("=" * 30)
+    
     if stats:
-        print(f"总仪表条目: {stats.get('总数量', '未知')} 条")
-        print(f"总台数: {stats.get('总台数', '未知')} 台")
-        print(f"仪表类型: {len(stats.get('类型统计', {}))} 种")
-        print(f"不同型号: {stats.get('不同型号数', '未知')} 种")
-        
-        # 显示只有位号无型号的统计
-        no_model_count = stats.get('只有位号无型号', 0)
-        if no_model_count > 0:
-            print(f"只有位号无型号: {no_model_count} 台")
-        
         type_distribution = stats.get('类型统计', {})
-        if type_distribution:
-            print("\n类型分布:")
-            sorted_types = sorted(type_distribution.items(), key=lambda x: x[1], reverse=True)
-            total_count = stats.get('总台数', 1)
-            for type_name, count in sorted_types:
-                # 显示所有类型，包括"无法识别"
-                percentage = (count / total_count) * 100
-                print(f"  • {type_name}: {count} 台 ({percentage:.1f}%)")
+        
+        if recommendation_target != "全部":
+            # 过滤特定类型的统计
+            if recommendation_target in type_distribution:
+                target_count = type_distribution[recommendation_target]
+                total_count = stats.get('总台数', 1)
+                percentage = (target_count / total_count) * 100
+                
+                print(f"目标仪表类型: {recommendation_target}")
+                print(f"数量: {target_count} 台 ({percentage:.1f}%)")
+                print(f"占总量比例: {percentage:.1f}%")
+                
+                # 如果需要，可以显示该类型的更多详细信息
+                classified_instruments = state.get("classified_instruments", [])
+                target_instruments = [inst for inst in classified_instruments 
+                                    if inst.get('类型') == recommendation_target]
+                
+                if target_instruments:
+                    # 统计该类型的型号分布
+                    model_stats = {}
+                    for inst in target_instruments:
+                        model = inst.get('型号', '未知型号')
+                        model_stats[model] = model_stats.get(model, 0) + inst.get('数量', 1)
+                    
+                    if len(model_stats) > 1:
+                        print(f"\n{recommendation_target}型号分布:")
+                        sorted_models = sorted(model_stats.items(), key=lambda x: x[1], reverse=True)
+                        for model, count in sorted_models:
+                            print(f"  • {model}: {count} 台")
+                
+            else:
+                print(f"⚠️ 未找到 {recommendation_target} 类型的仪表")
+                print("可用的仪表类型:")
+                for type_name, count in type_distribution.items():
+                    if count > 0:
+                        print(f"  • {type_name}: {count} 台")
+        else:
+            # 显示完整统计
+            print(f"总仪表条目: {stats.get('总数量', '未知')} 条")
+            print(f"总台数: {stats.get('总台数', '未知')} 台")
+            print(f"仪表类型: {len(type_distribution)} 种")
+            print(f"不同型号: {stats.get('不同型号数', '未知')} 种")
+            
+            # 显示只有位号无型号的统计
+            no_model_count = stats.get('只有位号无型号', 0)
+            if no_model_count > 0:
+                print(f"只有位号无型号: {no_model_count} 台")
+            
+            if type_distribution:
+                print("\n类型分布:")
+                sorted_types = sorted(type_distribution.items(), key=lambda x: x[1], reverse=True)
+                total_count = stats.get('总台数', 1)
+                for type_name, count in sorted_types:
+                    percentage = (count / total_count) * 100
+                    print(f"  • {type_name}: {count} 台 ({percentage:.1f}%)")
     else:
         print("暂无统计数据")
+    
     print("=" * 30)
     
-    state["final_report"] = f"仪表统计信息：\n{stats}"
-    logger.info("显示已有统计结果")
+    # 更新最终报告
+    if recommendation_target != "全部":
+        state["final_report"] = f"{recommendation_target}统计信息：\n数量: {type_distribution.get(recommendation_target, 0)} 台"
+    else:
+        state["final_report"] = f"仪表统计信息：\n{stats}"
+    
+    logger.info(f"显示统计结果完成，目标类型: {recommendation_target}")
     return state
 
 def _is_semantically_similar(new_standard: str, existing_standards: List[str], threshold: float = 0.8) -> bool:
@@ -1067,19 +1129,33 @@ def _is_semantically_similar(new_standard: str, existing_standards: List[str], t
         return new_standard in existing_standards
 
 def match_standard_clause_node(state: InstrumentAgentState) -> InstrumentAgentState:
-    """匹配标准条款"""
+    """匹配标准条款 - 支持按目标类型过滤，多选标准供LLM筛选"""
     show_step(state, "匹配安装标准")
     
     try:
         instruments = state.get("classified_instruments", [])
-        print(f"🔍 开始匹配标准，不同仪表数量: {len(instruments)}")
-        logger.info(f"为 {len(instruments)} 个仪表匹配标准")
+        recommendation_target = state.get("recommendation_target", "全部")
         
-        # 收集仪表类型
-        instrument_types = list(set(inst.get('类型', '无法识别') for inst in instruments))
-        instrument_types = [t for t in instrument_types if t != '无法识别']
+        print(f"🔍 开始匹配标准，目标类型: {recommendation_target}")
+        logger.info(f"为目标类型 '{recommendation_target}' 匹配标准，仪表总数: {len(instruments)}")
         
-        print(f"🔍 收集到仪表类型: {instrument_types}")
+        # 收集仪表类型 - 根据目标过滤
+        if recommendation_target == "全部":
+            instrument_types = list(set(inst.get('类型', '无法识别') for inst in instruments))
+            instrument_types = [t for t in instrument_types if t != '无法识别']
+        else:
+            # 只匹配目标类型
+            target_instruments = [inst for inst in instruments 
+                                if inst.get('类型') == recommendation_target]
+            if target_instruments:
+                instrument_types = [recommendation_target]
+                print(f"🔍 目标类型 '{recommendation_target}' 包含 {len(target_instruments)} 个仪表")
+            else:
+                print(f"⚠️ 目标类型 '{recommendation_target}' 不存在，将匹配所有类型")
+                instrument_types = list(set(inst.get('类型', '无法识别') for inst in instruments))
+                instrument_types = [t for t in instrument_types if t != '无法识别']
+        
+        print(f"🔍 将匹配的仪表类型: {instrument_types}")
         
         if not instrument_types:
             print("⚠️ 没有有效的仪表类型用于匹配标准")
@@ -1088,38 +1164,48 @@ def match_standard_clause_node(state: InstrumentAgentState) -> InstrumentAgentSt
             state["has_standards"] = False
             return state
         
-        # 为每种类型匹配标准
+        # 为每种类型匹配更多候选标准，让LLM来筛选
         all_standards = []
-        print(f"🔍 开始为 {len(instrument_types)} 种类型匹配标准...")
+        print(f"🔍 开始为 {len(instrument_types)} 种类型匹配标准（增加候选数量）...")
         
         for i, inst_type in enumerate(instrument_types, 1):
             try:
                 print(f"\n🔍 匹配标准 {i}/{len(instrument_types)}: {inst_type}")
-                from tools.match_standard_clause import match_standard_clause
-                standards = match_standard_clause(inst_type, query_type="installation", top_k=3)
+                from tools.enhanced_rag_retriever import EnhancedRAGRetriever
+                
+                # 使用增强检索器进行检索，增加候选数量
+                enhanced_retriever = EnhancedRAGRetriever()
+                search_results = enhanced_retriever.advanced_search(
+                    inst_type, 
+                    instrument_type=inst_type, 
+                    top_k=8  # 🎯 从3增加到8，提高召回率，让LLM来筛选
+                )
+                
+                # 提取内容文本
+                standards = [result['content'] for result in search_results if 'content' in result]
                 
                 if standards:
-                    print(f"   ✅ 找到 {len(standards)} 条高质量标准")
+                    print(f"   ✅ 找到 {len(standards)} 条候选标准（供LLM筛选）")
                     
-                    # 打印每条标准的详细内容
+                    # 打印每条标准的简要信息
                     for j, std in enumerate(standards, 1):
-                        print(f"   📋 标准 {j}: {std[:100]}..." if len(std) > 100 else f"   📋 标准 {j}: {std}")
+                        print(f"   📋 候选标准 {j}: {std[:80]}..." if len(std) > 80 else f"   📋 候选标准 {j}: {std}")
                     
-                    # 检查并添加到总列表（带语义去重）
+                    # 检查并添加到总列表（保留语义去重，但更宽松）
                     added_count = 0
                     for std in standards:
-                        # 检查是否与已有标准语义相似
-                        is_duplicate = _is_semantically_similar(std, all_standards)
+                        # 放宽语义去重的阈值，避免误删有用标准
+                        is_duplicate = _is_semantically_similar(std, all_standards, threshold=0.9)  # 提高阈值到0.9
                         
                         if not is_duplicate:
                             all_standards.append(std)
                             added_count += 1
                         else:
-                            print(f"   ⚠️ 跳过语义相似标准: {std[:50]}...")
+                            print(f"   ⚠️ 跳过高度相似标准: {std[:40]}...")
                     
-                    print(f"   ➕ 新增 {added_count} 条标准到总列表")
+                    print(f"   ➕ 新增 {added_count} 条候选标准到总列表")
                 else:
-                    print(f"   ❌ 未找到符合质量要求的标准 (相似度阈值: 0.6)")
+                    print(f"   ❌ 未找到候选标准")
                 
             except Exception as e:
                 print(f"   ⚠️ 匹配失败: {str(e)}")
@@ -1128,8 +1214,13 @@ def match_standard_clause_node(state: InstrumentAgentState) -> InstrumentAgentSt
         
         state["matched_standards"] = all_standards
         state["has_standards"] = len(all_standards) > 0
-        print(f"🔍 标准匹配完成，总共匹配到 {len(all_standards)} 条标准")
-        logger.info(f"匹配到 {len(all_standards)} 条标准")
+        
+        if recommendation_target != "全部":
+            print(f"🔍 为目标类型 '{recommendation_target}' 匹配到 {len(all_standards)} 条候选标准（供LLM筛选）")
+            logger.info(f"为目标类型 '{recommendation_target}' 匹配到 {len(all_standards)} 条候选标准")
+        else:
+            print(f"🔍 标准匹配完成，总共匹配到 {len(all_standards)} 条候选标准（供LLM筛选）")
+            logger.info(f"匹配到 {len(all_standards)} 条候选标准")
             
     except Exception as e:
         state["has_error"] = True
@@ -1208,19 +1299,19 @@ def skip_sensitive_and_go_on(state: InstrumentAgentState) -> InstrumentAgentStat
     return state
 
 def generate_installation_reco_node(state: InstrumentAgentState) -> InstrumentAgentState:
-    """生成安装推荐 - 使用LLM生成专业推荐内容"""
-    show_step(state, "生成安装推荐")
+    """生成安装推荐 - 使用增强版LLM生成器生成详细可靠的专业推荐内容并自动保存"""
+    show_step(state, "生成详细安装推荐")
     try:
-        from tools.generate_installation_recommendation import InstallationRecommendationGenerator
+        from tools.enhanced_installation_generator import EnhancedInstallationRecommendationGenerator
         
         instruments = state.get("classified_instruments", [])
         standards = state.get("matched_standards", [])
         recommendation_target = state.get("recommendation_target", "全部")
         
-        logger.info(f"🤖 使用LLM为 {len(instruments)} 个仪表生成安装推荐，目标类型: {recommendation_target}")
+        logger.info(f"🤖 使用增强版LLM为 {len(instruments)} 个仪表生成详细安装推荐，目标类型: {recommendation_target}")
         
-        # 初始化LLM推荐生成器
-        generator = InstallationRecommendationGenerator()
+        # 初始化增强版LLM推荐生成器（启用自动保存）
+        generator = EnhancedInstallationRecommendationGenerator(auto_save=True)
         
         # 按型号分组仪表（更细粒度）
         model_groups = {}
@@ -1252,11 +1343,12 @@ def generate_installation_reco_node(state: InstrumentAgentState) -> InstrumentAg
                 target_groups = [g for g in model_groups.values() if g['type'] != '无法识别']
                 logger.warning(f"指定类型 '{recommendation_target}' 不存在，生成所有型号")
         
-        logger.info(f"将为 {len(target_groups)} 种型号使用LLM生成推荐")
+        logger.info(f"将为 {len(target_groups)} 种型号使用增强版LLM生成详细推荐并自动保存")
         
         recommendations = []
+        saved_files = []  # 记录保存的文件
         
-        # 为每种目标型号生成LLM推荐
+        # 为每种目标型号生成详细的LLM推荐
         for group in target_groups:
             inst_type = group['type']
             inst_model = group['model']
@@ -1273,9 +1365,9 @@ def generate_installation_reco_node(state: InstrumentAgentState) -> InstrumentAg
             process_conditions = '; '.join(set(notes)) if notes else ''
             
             try:
-                logger.info(f"🤖 LLM生成 {inst_type}-{inst_model} 安装推荐...")
+                logger.info(f"🤖 使用增强版LLM生成 {inst_type}-{inst_model} 详细安装推荐...")
                 
-                # 使用LLM生成专业推荐
+                # 使用增强版LLM生成详细专业推荐（自动保存为.md文件）
                 llm_recommendation = generator.generate_installation_recommendation(
                     instrument_type=inst_type,
                     model_spec=inst_model,
@@ -1290,8 +1382,15 @@ def generate_installation_reco_node(state: InstrumentAgentState) -> InstrumentAg
                 # 如果生成失败，使用基础模板
                 if '生成失败' in recommendation_content or '错误' in recommendation_content:
                     logger.warning(f"LLM生成失败，使用基础推荐: {inst_type}-{inst_model}")
-                    recommendation_content = f"基于{inst_type}的标准安装方案：根据行业标准和仪表特性，建议采用标准化安装方式，确保仪表精度和系统安全性。"
-                
+                    recommendation_content = f"""## 基础安装方案
+基于{inst_type}的标准工程安装方案：
+1. 按照国家标准和行业规范执行安装
+2. 确保仪表精度和系统安全性
+3. 遵循制造商技术要求
+4. 实施质量控制和验收程序
+
+**重要提醒：** 详细推荐生成时遇到技术问题，请务必咨询专业工程师确保安装质量和安全性。"""
+
                 recommendations.append({
                     '仪表类型': inst_type,
                     '型号': inst_model,
@@ -1299,30 +1398,65 @@ def generate_installation_reco_node(state: InstrumentAgentState) -> InstrumentAg
                     '规格': spec_text,
                     '推荐内容': recommendation_content,
                     '材料清单': llm_recommendation.get('material_list', ''),
-                    '安全要求': llm_recommendation.get('safety_requirements', '')
+                    '安全要求': llm_recommendation.get('safety_requirements', ''),
+                    '保存文件': llm_recommendation.get('saved_file_path', '')
                 })
                 
-                logger.info(f"✅ LLM为 {inst_type}-{inst_model} 生成推荐成功 ({total_quantity} 台)")
+                # 记录保存的文件
+                if llm_recommendation.get('saved_file_path'):
+                    saved_files.append(llm_recommendation.get('saved_file_path'))
+                
+                logger.info(f"✅ 增强版LLM为 {inst_type}-{inst_model} 生成详细推荐成功 ({total_quantity} 台)")
+                if llm_recommendation.get('saved_file_path'):
+                    logger.info(f"📄 推荐已保存: {llm_recommendation.get('saved_file_path')}")
                 
             except Exception as e:
-                logger.error(f"LLM生成推荐失败 {inst_type}-{inst_model}: {str(e)}")
-                # 使用基础推荐作为备份
+                logger.error(f"增强版LLM生成推荐失败 {inst_type}-{inst_model}: {str(e)}")
+                # 使用工程规范的备份推荐
                 recommendations.append({
                     '仪表类型': inst_type,
                     '型号': inst_model,
                     '数量': total_quantity,
                     '规格': spec_text,
-                    '推荐内容': f"基于{inst_type}的标准安装方案：根据行业标准，建议采用标准安装方式，确保仪表精度和安全性。详细推荐生成时遇到技术问题，请咨询专业工程师。"
+                    '推荐内容': f"""## 工程安装基础方案
+基于{inst_type}的标准工程安装方案：
+
+### 安装位置要求
+- 符合工艺流程和测量精度要求
+- 便于维护和操作安全
+- 避免振动、电磁干扰等不利因素
+
+### 安装工艺要求  
+- 严格按照设计图纸和技术规范执行
+- 遵循国家标准和行业规范
+- 确保连接可靠、密封良好
+
+### 质量控制
+- 执行三检制度（自检、互检、专检）
+- 进行必要的调试和验收测试
+- 建立完整的安装记录和档案
+
+**安全提醒：** 由于技术原因无法生成详细推荐，请务必咨询专业工程师，确保安装的可靠性和安全性。""",
+                    '材料清单': '请参考设计图纸和技术规范',
+                    '安全要求': '严格遵循相关安全规程和标准',
+                    '保存文件': ''
                 })
-                logger.info(f"⚠️  {inst_type}-{inst_model} 使用备用推荐")
+                logger.info(f"⚠️  {inst_type}-{inst_model} 使用工程规范备用推荐")
         
         state["installation_recommendations"] = recommendations
-        logger.info(f"🎉 LLM安装推荐生成完成: {len(recommendations)} 条专业推荐")
+        
+        # 在日志中显示保存的文件信息
+        if saved_files:
+            logger.info(f"📁 已保存 {len(saved_files)} 个推荐文件到 ./recommendation/ 目录")
+            for file_path in saved_files:
+                logger.info(f"   📄 {file_path}")
+        
+        logger.info(f"🎉 增强版LLM详细安装推荐生成完成: {len(recommendations)} 条专业推荐")
             
     except Exception as e:
         state["has_error"] = True
-        state["error_context"] = f"LLM推荐生成失败: {str(e)}"
-        logger.error(f"LLM推荐生成异常: {str(e)}")
+        state["error_context"] = f"增强版LLM推荐生成失败: {str(e)}"
+        logger.error(f"增强版LLM推荐生成异常: {str(e)}")
     
     return state
 

@@ -29,138 +29,230 @@ class EnhancedRAGRetriever:
         self.semantic_enhancer = self._build_semantic_enhancer()
         
     def _build_instrument_vocabulary(self) -> Dict[str, Dict]:
-        """构建仪表领域词汇表和语义关系（从LLM识别结果动态生成）"""
-        try:
-            # 从LLM识别结果中获取仪表类型
-            llm_types = self._load_llm_instrument_types()
-            
-            if not llm_types:
-                logger.warning("⚠️ 未找到LLM识别的仪表类型，使用基本词汇表")
-                return self._build_basic_vocabulary()
-            
-            # 基于LLM识别的类型动态构建词汇表
-            vocabulary = {}
-            
-            for instrument_type, info in llm_types.items():
-                category = info.get('category', '其他')
-                
-                # 为每个仪表类型生成相关词汇
-                vocab_entry = {
-                    "main_types": [instrument_type],  # 以LLM识别的类型为主
-                    "related_terms": self._generate_related_terms(instrument_type, category),
-                    "installation_terms": self._generate_installation_terms(instrument_type, category),
-                    "materials": self._generate_material_terms(instrument_type, category)
-                }
-                
-                vocabulary[instrument_type] = vocab_entry
-            
-            logger.info(f"🤖 基于LLM识别结果构建了 {len(vocabulary)} 种仪表的词汇表")
-            return vocabulary
-            
-        except Exception as e:
-            logger.warning(f"⚠️ 动态构建词汇表失败: {str(e)}，使用基本词汇表")
-            return self._build_basic_vocabulary()
-    
-    def _load_llm_instrument_types(self) -> Dict:
-        """加载LLM识别的仪表类型"""
-        try:
-            import json
-            llm_types_file = "./data/llm_instrument_types.json"
-            
-            if os.path.exists(llm_types_file):
-                with open(llm_types_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    return data.get('instrument_types', {})
-            
-            return {}
-            
-        except Exception as e:
-            logger.warning(f"加载LLM仪表类型失败: {str(e)}")
-            return {}
-    
-    def _generate_related_terms(self, instrument_type: str, category: str) -> List[str]:
-        """基于仪表类型和类别动态生成相关术语"""
-        base_terms = []
-        instrument_lower = instrument_type.lower()
-        
-        # 基于类别生成通用术语
-        if category == '温度':
-            base_terms.extend(["测温", "感温", "温度传感器", "保护管", "测温点"])
-        elif category == '压力':
-            base_terms.extend(["压力测量", "取压", "压力传感", "取压点", "导压管"])
-        elif category == '流量':
-            base_terms.extend(["流量测量", "流速", "流体", "介质流动", "流向"])
-        elif category == '液位' or category == '物位':
-            base_terms.extend(["液位测量", "物位", "界面", "液位范围"])
-        elif category == '控制':
-            base_terms.extend(["控制", "调节", "执行", "定位器"])
-        
-        # 基于具体类型名称生成特定术语
-        if '热电偶' in instrument_lower:
-            base_terms.extend(["热电偶", "PT100", "K型", "接线盒"])
-        elif '压力' in instrument_lower:
-            base_terms.extend(["膜片", "弹簧管", "三阀组", "缓冲器"])
-        elif '流量' in instrument_lower:
-            base_terms.extend(["直管段", "上游", "下游", "管道中心"])
-        elif '液位' in instrument_lower:
-            base_terms.extend(["浮子", "浮球", "导向管", "取源管"])
-        elif '电磁' in instrument_lower:
-            base_terms.extend(["电磁", "电极", "衬里", "法兰"])
-        elif '差压' in instrument_lower:
-            base_terms.extend(["差压", "压差", "膜片"])
-        elif '浮球' in instrument_lower:
-            base_terms.extend(["浮球", "浮子", "导波杆"])
-        
-        return list(set(base_terms))  # 去重
-    
-    def _generate_installation_terms(self, instrument_type: str, category: str) -> List[str]:
-        """生成安装相关术语"""
-        installation_terms = ["安装位置", "安装高度", "安装方向", "固定", "支撑"]
-        
-        instrument_lower = instrument_type.lower()
-        
-        # 基于仪表类型添加特定安装术语
-        if '温度' in category.lower() or '热电偶' in instrument_lower:
-            installation_terms.extend(["插入深度", "保护套", "接线盒"])
-        elif '压力' in category.lower() or '压力' in instrument_lower:
-            installation_terms.extend(["取压点", "导压管", "三阀组"])
-        elif '流量' in category.lower() or '流量' in instrument_lower:
-            installation_terms.extend(["直管段", "上游", "下游", "管道中心"])
-        elif '液位' in category.lower() or '液位' in instrument_lower:
-            installation_terms.extend(["垂直安装", "导向管", "液位范围"])
-        elif '阀' in instrument_lower or '控制' in category.lower():
-            installation_terms.extend(["阀门方向", "流向", "连接方式"])
-        
-        return list(set(installation_terms))
-    
-    def _generate_material_terms(self, instrument_type: str, category: str) -> List[str]:
-        """生成材料相关术语"""
-        base_materials = ["不锈钢", "碳钢", "金属套管"]
-        
-        instrument_lower = instrument_type.lower()
-        
-        # 基于仪表类型添加特定材料
-        if '温度' in category.lower():
-            base_materials.extend(["陶瓷", "金属套管", "保护管"])
-        elif '压力' in category.lower():
-            base_materials.extend(["不锈钢管", "铜管", "聚四氟乙烯"])
-        elif '流量' in category.lower():
-            base_materials.extend(["衬里", "电极", "法兰"])
-        elif '液位' in category.lower():
-            base_materials.extend(["浮筒", "导波杆", "缆绳"])
-        elif '阀' in instrument_lower:
-            base_materials.extend(["阀体材料", "密封材料", "弹簧"])
-        
-        return list(set(base_materials))
+        """构建仪表领域词汇表和语义关系（使用基本硬编码词汇表）"""
+        logger.info("构建基本仪表词汇表...")
+        return self._build_basic_vocabulary()
     
     def _build_basic_vocabulary(self) -> Dict[str, Dict]:
-        """基本词汇表（备用方案）"""
+        """基本词汇表（硬编码）——覆盖常见测控/分析/执行仪表"""
         return {
+            # 1 ───────── 温度
+            "温度仪表": {
+                "main_types": [
+                    "热电偶", "热电阻", "双金属温度计", "压力式温度计",
+                    "表面温度计", "温度变送器", "光纤温度计"
+                ],
+                "related_terms": [
+                    "测温", "感温", "温度传感器", "保护管", "测温点",
+                    "PT100", "PT1000", "K型", "J型", "T型", "E型",
+                    "补偿导线", "接线盒", "温包", "毛细管", "抗震"
+                ],
+                "installation_terms": [
+                    "安装位置", "安装深度", "插入长度", "倾斜安装",
+                    "固定方式", "伴热", "隔热", "弯曲半径", "防弯曲",
+                    "防磨损", "防冲刷"
+                ],
+                "materials": [
+                    "不锈钢", "316L", "304", "哈氏合金", "陶瓷", "金属套管"
+                ]
+            },
+
+            # 2 ───────── 压力
+            "压力仪表": {
+                "main_types": [
+                    "压力变送器", "差压变送器", "压力表", "绝压表",
+                    "微压表", "压力开关", "隔膜压力表"
+                ],
+                "related_terms": [
+                    "压力测量", "取压", "压力传感", "取压点", "导压管",
+                    "膜片", "弹簧管", "三阀组", "隔离膜片", "毛细管",
+                    "正压室", "负压室", "缓冲器"
+                ],
+                "installation_terms": [
+                    "取压口", "安装高度", "导压管路", "环形冷凝弯",
+                    "U型冷凝弯", "冷凝器", "脉冲管坡度", "排污阀",
+                    "吹扫", "防堵", "伴热"
+                ],
+                "materials": [
+                    "不锈钢管", "铜管", "聚四氟乙烯", "哈氏合金", "膜片材料"
+                ]
+            },
+
+            # 3 ───────── 流量
+            "流量仪表": {
+                "main_types": [
+                    "孔板流量计", "喷咀流量计", "文丘里流量计",
+                    "电磁流量计", "涡街流量计", "涡轮流量计",
+                    "转子流量计", "靶式流量计", "科里奥利质量流量计",
+                    "超声波流量计", "椭圆齿轮流量计", "皮托管", "均速管"
+                ],
+                "related_terms": [
+                    "流量测量", "流速", "流体", "介质流动", "直管段",
+                    "上游", "下游", "定压孔", "均压环", "取压孔",
+                    "满管", "接地环", "β系数", "电极", "衬里", "信号放大器"
+                ],
+                "installation_terms": [
+                    "上游直管段", "下游直管段", "管道中心", "流向",
+                    "接地", "法兰连接", "同轴度", "整流器", "支架", "减振"
+                ],
+                "materials": [
+                    "衬里材料", "电极材料", "哈氏合金", "316L", "法兰",
+                    "密封垫片", "接地线"
+                ]
+            },
+
+            # 4 ───────── 液位 / 物位
+            "液位仪表": {
+                "main_types": [
+                    "浮球液位计", "浮筒液位计", "磁翻板液位计", "导波雷达液位计",
+                    "雷达液位计", "超声波液位计", "差压式液位计", "射线液位计"
+                ],
+                "related_terms": [
+                    "液位测量", "物位", "界面", "液位范围", "浮子",
+                    "浮球", "导波杆", "补偿式平衡容器", "旁路腔体",
+                    "安装盲区", "回波", "波束角"
+                ],
+                "installation_terms": [
+                    "安装位置", "安装高度", "导向管", "旁路管",
+                    "取源管", "盲区", "防波挡板", "补偿容器", "防挂料"
+                ],
+                "materials": [
+                    "304", "316L", "哈氏合金", "导波杆", "缆绳", "法兰"
+                ]
+            },
+
+            # 5 ───────── 湿度
+            "湿度仪表": {
+                "main_types": ["温湿度变送器", "湿度传感器", "露点温湿度记录仪"],
+                "related_terms": [
+                    "湿度", "相对湿度", "湿敏元件", "干湿球",
+                    "透气膜", "冷凝", "空气对流"
+                ],
+                "installation_terms": [
+                    "通风", "遮阳", "防冷凝", "安装高度", "过滤帽"
+                ],
+                "materials": ["聚四氟乙烯滤膜", "不锈钢网罩"]
+            },
+
+            # 6 ───────── 露点
+            "露点仪表": {
+                "main_types": ["露点仪", "露点变送器"],
+                "related_terms": [
+                    "露点", "微量水分", "陶瓷传感芯片", "测量腔", "干燥剂"
+                ],
+                "installation_terms": [
+                    "旁路取样", "常温取样", "保温", "遮光", "防冷凝"
+                ],
+                "materials": ["316L", "铝合金", "密封圈"]
+            },
+
+            # 7 ───────── 密度 / 重量
+            "密度仪表": {
+                "main_types": [
+                    "振筒密度计", "科里奥利密度计", "在线密度变送器",
+                    "称重传感器", "负荷传感器"
+                ],
+                "related_terms": [
+                    "密度测量", "质量", "振筒", "密度计", "称重",
+                    "剪切梁", "压式", "缓冲块"
+                ],
+                "installation_terms": [
+                    "垂直受力", "减振支架", "零点标定", "支撑平台"
+                ],
+                "materials": ["不锈钢", "合金钢", "橡胶减振垫"]
+            },
+
+            # 8 ───────── 振动
+            "振动仪表": {
+                "main_types": ["加速度计", "速度传感器", "振动监测仪"],
+                "related_terms": [
+                    "振动", "加速度", "位移", "主灵敏轴",
+                    "三轴座", "频响", "冲击"
+                ],
+                "installation_terms": [
+                    "固紧螺钉", "粘贴", "磁吸", "减振", "温度补偿"
+                ],
+                "materials": ["钛合金壳体", "陶瓷剪切片"]
+            },
+
+            # 9 ───────── 转速 / 速度
+            "转速仪表": {
+                "main_types": ["转速探头", "测速齿轮", "霍尔传感器", "磁电速度计"],
+                "related_terms": [
+                    "转速", "速度", "脉冲", "霍尔开关", "磁电感应"
+                ],
+                "installation_terms": ["间隙", "同心度", "支架", "屏蔽"],
+                "materials": ["不锈钢罩", "永磁体", "屏蔽线"]
+            },
+
+            # 10 ───────── 气体检测
+            "气体检测仪表": {
+                "main_types": [
+                    "可燃气体探测器", "毒性气体探测器", "氧含量分析仪",
+                    "红外气体分析仪"
+                ],
+                "related_terms": [
+                    "气体检测", "探头", "扩散式", "泵吸式",
+                    "标定罩", "报警", "安装高度"
+                ],
+                "installation_terms": [
+                    "流量控制", "遮雨罩", "防尘", "防爆", "独立接地"
+                ],
+                "materials": ["铝合金壳体", "不锈钢防爆腔", "过滤片"]
+            },
+
+            # 11 ───────── 分析 / 成分
+            "分析仪表": {
+                "main_types": [
+                    "气相色谱", "在线红外分析仪", "pH 计",
+                    "电导率仪", "溶氧仪", "浊度计"
+                ],
+                "related_terms": [
+                    "取样", "预处理", "代表性样品", "过滤器",
+                    "排放管", "样品冷却器", "标定", "交叉敏感"
+                ],
+                "installation_terms": [
+                    "取样探头", "伴热管线", "旁路取样",
+                    "恒温", "冷凝", "排液"
+                ],
+                "materials": ["PFA 管", "316L", "玻璃电极", "隔膜"]
+            },
+
+            # 12 ───────── 控制设备
+            "控制设备": {
+                "main_types": [
+                    "调节阀", "自力式调节阀", "电动执行机构",
+                    "气动执行机构", "液动执行机构", "阀门定位器",
+                    "电磁阀"
+                ],
+                "related_terms": [
+                    "控制", "调节", "执行", "定位器",
+                    "行程", "转矩", "开度", "信号", "联锁"
+                ],
+                "installation_terms": [
+                    "安装方向", "介质流向", "连接方式",
+                    "行程调整", "信号接线", "连杆", "支架", "减振"
+                ],
+                "materials": [
+                    "阀体材料", "316L", "WC6", "密封件", "弹簧", "执行机构"
+                ]
+            },
+
+            # 13 ───────── 通用
             "通用仪表": {
-                "main_types": ["仪表", "传感器", "变送器", "计量器"],
-                "related_terms": ["测量", "检测", "监测", "传感", "信号"],
-                "installation_terms": ["安装位置", "安装要求", "固定方式", "连接"],
-                "materials": ["不锈钢", "金属", "材料选择"]
+                "main_types": ["仪表", "传感器", "变送器", "计量器", "显示器"],
+                "related_terms": [
+                    "测量", "检测", "监测", "传感", "信号",
+                    "显示", "报警", "输出", "联锁"
+                ],
+                "installation_terms": [
+                    "安装位置", "安装要求", "固定方式",
+                    "连接", "屏蔽", "接线", "接地", "防爆"
+                ],
+                "materials": [
+                    "不锈钢", "铝合金", "工程塑料", "防护等级 IP65",
+                    "IP67", "IP68"
+                ]
             }
         }
     
@@ -469,6 +561,76 @@ class EnhancedRAGRetriever:
         all_results.sort(key=lambda x: x.get('rerank_score', x.get('score', 0)), reverse=True)
         
         return all_results[:5]  # 返回前5个最相关的结果
+    
+    def get_comprehensive_standards(self, instrument_type: str) -> Dict[str, List[Dict]]:
+        """
+        获取某仪表类型的综合安装规范信息（兼容接口）
+        
+        Args:
+            instrument_type: 仪表类型
+        
+        Returns:
+            包含安装方法、材料要求等分类信息的字典
+        """
+        result = {
+            'instrument_type': instrument_type,
+            'installation_methods': [],
+            'material_requirements': [],
+            'safety_requirements': [],
+            'maintenance_requirements': []
+        }
+        
+        try:
+            # 搜索安装方法 - 🎯 增加到5条，供LLM筛选
+            installation_results = self.advanced_search(f"{instrument_type}安装要求", instrument_type, top_k=5)
+            for res in installation_results:
+                # 转换为基础检索器兼容的格式
+                result['installation_methods'].append({
+                    'content': res['content'],
+                    'score': res.get('rerank_score', res.get('score', 0)),
+                    'query': f"{instrument_type}安装要求"
+                })
+            
+            # 搜索材料要求 - 🎯 增加到3条，供LLM筛选
+            material_results = self.advanced_search(f"{instrument_type}材料要求", instrument_type, top_k=3)
+            for res in material_results:
+                if any(keyword in res['content'] for keyword in ['材料', '阀门', '电缆', '管路']):
+                    result['material_requirements'].append({
+                        'content': res['content'],
+                        'score': res.get('rerank_score', res.get('score', 0)),
+                        'query': f"{instrument_type}材料要求"
+                    })
+            
+            # 搜索安全要求 - 🎯 增加到3条，供LLM筛选
+            safety_results = self.advanced_search(f"{instrument_type}安全要求", instrument_type, top_k=3)
+            for res in safety_results:
+                if any(keyword in res['content'] for keyword in ['安全', '防护', '注意']):
+                    result['safety_requirements'].append({
+                        'content': res['content'],
+                        'score': res.get('rerank_score', res.get('score', 0)),
+                        'query': f"{instrument_type}安全要求"
+                    })
+            
+            # 搜索维护要求 - 🎯 增加到3条，供LLM筛选
+            maintenance_results = self.advanced_search(f"{instrument_type}维护", instrument_type, top_k=3)
+            for res in maintenance_results:
+                if any(keyword in res['content'] for keyword in ['维护', '保养', '检修']):
+                    result['maintenance_requirements'].append({
+                        'content': res['content'],
+                        'score': res.get('rerank_score', res.get('score', 0)),
+                        'query': f"{instrument_type}维护"
+                    })
+            
+            logger.info(f"为 {instrument_type} 生成综合标准信息: "
+                       f"安装{len(result['installation_methods'])}条, "
+                       f"材料{len(result['material_requirements'])}条, "
+                       f"安全{len(result['safety_requirements'])}条, "
+                       f"维护{len(result['maintenance_requirements'])}条")
+        
+        except Exception as e:
+            logger.error(f"生成 {instrument_type} 综合标准信息失败: {str(e)}")
+        
+        return result
 
 def test_enhanced_retriever():
     """测试增强检索器"""

@@ -554,7 +554,7 @@ def create_task_planner_with_llm(user_input: str) -> List[Dict[str, Any]]:
 - 如果要统计，需要先parse，再stats任务，默认target是"全部"
 - 如果要安装建议，需要完整流程：先parse，再stats，最后reco任务
   * 当用户说"安装建议"而没有指定类型时，target设为"全部"
-  * 只有明确提到特定类型时才使用具体类型，如"温度仪表安装建议"
+  * 当用户明确提到特定类型时，stats和reco的target都应该设为该特定类型
 - 如果要图表，需要chart任务
 - 按逻辑顺序排列任务：parse → stats → reco → chart
 
@@ -565,8 +565,14 @@ def create_task_planner_with_llm(user_input: str) -> List[Dict[str, Any]]:
 用户："给我安装推荐"
 → [{"type":"parse","target":"file/test.xlsx"},{"type":"stats","target":"全部"},{"type":"reco","target":"全部"}]
 
-用户："我要温度仪表的安装建议"
-→ [{"type":"parse","target":"file/test.xlsx"},{"type":"stats","target":"全部"},{"type":"reco","target":"温度仪表"}]
+用户："我要温度仪表的统计和安装建议"
+→ [{"type":"parse","target":"file/test.xlsx"},{"type":"stats","target":"温度仪表"},{"type":"reco","target":"温度仪表"}]
+
+用户："温度仪表的安装建议"
+→ [{"type":"parse","target":"file/test.xlsx"},{"type":"stats","target":"温度仪表"},{"type":"reco","target":"温度仪表"}]
+
+用户："统计温度仪表数据"
+→ [{"type":"parse","target":"file/test.xlsx"},{"type":"stats","target":"温度仪表"}]
 
 用户："统计仪表数据"
 → [{"type":"parse","target":"file/test.xlsx"},{"type":"stats","target":"全部"}]
@@ -638,52 +644,9 @@ def create_simple_task_plan(user_input: str) -> List[Dict[str, Any]]:
 
 def _extract_instrument_type_from_input(user_input_lower: str) -> Optional[str]:
     """
-    从用户输入中动态提取仪表类型（不使用硬编码）
+    从用户输入中提取仪表类型（使用基本关键词识别）
     """
-    try:
-        # 尝试从LLM识别结果中获取仪表类型
-        llm_types = _get_llm_identified_types()
-        
-        if llm_types:
-            # 检查用户输入是否匹配任何LLM识别的类型
-            for instrument_type in llm_types:
-                type_lower = instrument_type.lower()
-                # 完整匹配
-                if type_lower in user_input_lower:
-                    return instrument_type
-                # 部分匹配（去掉通用后缀）
-                for suffix in ['仪表', '表', '计', '器']:
-                    if type_lower.endswith(suffix):
-                        base_type = type_lower.replace(suffix, '')
-                        if base_type in user_input_lower:
-                            return instrument_type
-        
-        # 如果LLM类型不匹配，使用基本关键词识别
-        return _basic_type_extraction(user_input_lower)
-        
-    except Exception as e:
-        logger.warning(f"动态类型提取失败: {str(e)}")
-        return _basic_type_extraction(user_input_lower)
-
-def _get_llm_identified_types() -> List[str]:
-    """
-    获取LLM识别的仪表类型列表
-    """
-    try:
-        import os
-        llm_types_file = "./data/llm_instrument_types.json"
-        
-        if os.path.exists(llm_types_file):
-            import json
-            with open(llm_types_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return list(data.get('instrument_types', {}).keys())
-        
-        return []
-        
-    except Exception as e:
-        logger.warning(f"获取LLM识别类型失败: {str(e)}")
-        return []
+    return _basic_type_extraction(user_input_lower)
 
 def _basic_type_extraction(user_input_lower: str) -> Optional[str]:
     """

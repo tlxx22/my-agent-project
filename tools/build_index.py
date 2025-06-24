@@ -7,7 +7,7 @@ import sys
 import pickle
 import json
 import re
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import logging
 import PyPDF2
 import faiss
@@ -21,6 +21,7 @@ import fitz  # PyMuPDF
 
 # 配置常量
 FAISS_INDEX_PATH = "./data/indexes/instrument_standards.index"
+EMBEDDING_MODEL = "shibing624/text2vec-base-chinese"
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -28,312 +29,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # 配置项现在由DocumentIndexer类内部管理
 
 logger = logging.getLogger(__name__)
-
-class InstrumentTypeClassifier:
-    """LLM驱动的仪表类型智能识别器"""
-    
-    def __init__(self):
-        self.identified_types = {}
-        self.classification_cache = {}
-    
-    def analyze_documents_with_llm(self, documents: List[str]) -> Dict[str, Dict]:
-        """
-        使用LLM智能识别文档中的仪表类型（二级分类结构）
-        
-        Args:
-            documents: 文档文本列表
-        
-        Returns:
-            识别出的仪表类型字典（包含大分类和具体仪表的层次结构）
-        """
-        logger.info("🤖 启动LLM智能识别仪表类型（二级分类）...")
-        logger.info(f"📚 分析文档数量: {len(documents)} 个文档块")
-        
-        # 合并所有文档文本进行分析
-        combined_text = "\n".join(documents)
-        
-        # 设计增强的二级分类LLM prompt
-        analysis_prompt = f"""
-请分析以下仪表安装规范文档，识别出文档中提到的**具体仪表类型**，并按照二级分类结构组织。
-
-## 分类要求：
-1. **大分类**：温度仪表、压力仪表、流量仪表、液位仪表、控制设备、电气设备、分析仪表等
-2. **具体仪表**：每个具体仪表都必须标明所属的大分类
-3. **只识别具体设备名称**，排除"仪表"、"设备"等通用词汇
-4. **每种仪表在文档中应该有实际提及**
-
-## 示例格式：
-```
-热电偶 (type: 温度仪表)
-热电阻 (type: 温度仪表)  
-双金属温度计 (type: 温度仪表)
-压力变送器 (type: 压力仪表)
-差压变送器 (type: 压力仪表)
-电磁流量计 (type: 流量仪表)
-涡轮流量计 (type: 流量仪表)
-磁翻板液位计 (type: 液位仪表)
-浮球液位计 (type: 液位仪表)
-调节阀 (type: 控制设备)
-电动执行机构 (type: 控制设备)
-配电箱 (type: 电气设备)
-控制柜 (type: 电气设备)
-PH计 (type: 分析仪表)
-溶氧仪 (type: 分析仪表)
-```
-
-## 文档内容：
-{combined_text}
-
-## 请以JSON格式返回，结构如下：
-```json
-{{
-    "instrument_categories": {{
-        "温度仪表": {{
-            "description": "用于温度测量和控制的仪表设备",
-            "instruments": {{
-                "热电偶": {{
-                    "frequency": 15,
-                    "description": "用于高温测量的温度传感器",
-                    "typical_models": ["WRN-630", "K型热电偶"],
-                    "main_applications": ["锅炉温度", "管道温度"]
-                }},
-                "热电阻": {{
-                    "frequency": 12,
-                    "description": "用于中低温测量的温度传感器", 
-                    "typical_models": ["WZP-630", "Pt100"],
-                    "main_applications": ["给水温度", "环境温度"]
-                }}
-            }}
-        }},
-        "压力仪表": {{
-            "description": "用于压力测量和控制的仪表设备",
-            "instruments": {{
-                "压力变送器": {{
-                    "frequency": 20,
-                    "description": "将压力信号转换为标准信号的设备",
-                    "typical_models": ["EJA430A", "3051"],
-                    "main_applications": ["管道压力监测", "容器压力控制"]
-                }},
-                "差压变送器": {{
-                    "frequency": 8,
-                    "description": "测量两点间压力差的变送器",
-                    "typical_models": ["EJA110A", "3051DP"],
-                    "main_applications": ["流量测量", "液位测量"]
-                }}
-            }}
-        }}
-    }},
-    "summary": {{
-        "total_categories": 6,
-        "total_instruments": 25,
-        "analysis_method": "llm_hierarchical_analysis"
-    }}
-}}
-```
-
-注意：
-- 识别尽可能多的具体仪表类型
-- 每个仪表都要归类到合适的大分类下
-- 提供典型型号和主要应用场景
-- 估算在文档中的出现频次
-"""
-        
-        try:
-            # 调用LLM进行二级分类分析
-            result = self._call_llm_for_analysis(analysis_prompt)
-            
-            if result and "instrument_categories" in result:
-                # 转换为扁平化的格式，便于后续处理
-                flattened_types = self._flatten_hierarchical_results(result['instrument_categories'])
-                
-                logger.info(f"✅ LLM成功识别了 {len(flattened_types)} 种具体仪表类型")
-                logger.info(f"📊 覆盖了 {len(result['instrument_categories'])} 个大分类")
-                
-                # 显示识别结果概览
-                self._display_hierarchical_results(result['instrument_categories'])
-                
-                return flattened_types
-            else:
-                logger.warning("⚠️ LLM分析结果格式不正确，无法识别仪表类型")
-                return {}
-                
-        except Exception as e:
-            logger.warning(f"⚠️ LLM分析失败: {str(e)}，无法识别仪表类型")
-            return {}
-    
-    def _call_llm_for_analysis(self, prompt: str) -> Dict:
-        """
-        调用LLM进行分析
-        
-        Args:
-            prompt: 分析提示词
-        
-        Returns:
-            LLM分析结果
-        """
-        # 这里可以集成不同的LLM服务
-        # 比如OpenAI API、Azure OpenAI、本地LLM等
-        
-        try:
-            # 首先尝试使用config中配置的LLM
-            from config.settings import get_openai_config
-            llm_config = get_openai_config()
-            
-            # 检查是否有有效的API key
-            if llm_config.get('api_key'):
-                logger.info(f"🤖 使用OpenAI API: {llm_config.get('model', 'gpt-4o-mini')}")
-                return self._call_openai_llm(prompt, llm_config)
-            else:
-                logger.warning("⚠️ OpenAI API key未配置，使用本地分析")
-                return self._call_local_llm(prompt)
-                
-        except ImportError:
-            logger.info("未找到LLM配置，尝试本地分析")
-            return self._call_local_llm(prompt)
-    
-    def _call_openai_llm(self, prompt: str, config: Dict) -> Dict:
-        """调用OpenAI API"""
-        try:
-            from openai import OpenAI
-            
-            # 创建OpenAI客户端
-            client = OpenAI(
-                api_key=config.get('api_key'),
-                base_url=config.get('base_url', 'https://api.openai.com/v1')
-            )
-            
-            logger.info(f"📡 调用OpenAI API - 模型: {config.get('model', 'gpt-4o-mini')}")
-            
-            response = client.chat.completions.create(
-                model=config.get('model', 'gpt-4o-mini'),
-                messages=[
-                    {"role": "system", "content": "你是一个专业的工业仪表识别专家。请仔细分析文档内容，识别出具体的仪表类型，避免通用词汇如'仪表'、'设备'等。"},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1,
-                max_tokens=2000
-            )
-            
-            result_text = response.choices[0].message.content
-            logger.info(f"✅ OpenAI API调用成功，响应长度: {len(result_text)} 字符")
-            
-            # 解析JSON响应
-            import json
-            try:
-                return json.loads(result_text)
-            except json.JSONDecodeError as e:
-                logger.warning(f"⚠️ JSON解析失败: {e}")
-                logger.info(f"原始响应: {result_text[:500]}...")
-                # 尝试提取JSON内容
-                json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
-                if json_match:
-                    return json.loads(json_match.group())
-                else:
-                    raise
-            
-        except Exception as e:
-            logger.error(f"OpenAI API调用失败: {str(e)}")
-            raise
-    
-    def _call_local_llm(self, prompt: str) -> Dict:
-        """本地LLM备用方案（现在直接返回空，因为我们有OpenAI API）"""
-        logger.warning("⚠️ 没有可用的LLM配置，无法进行仪表类型识别")
-        return {
-            'instrument_types': {}
-        }
-    
-    def _flatten_hierarchical_results(self, categories: Dict) -> Dict[str, Dict]:
-        """
-        将层次化结果转换为扁平化格式，便于后续使用
-        
-        Args:
-            categories: 层次化的分类结果
-        
-        Returns:
-            扁平化的仪表类型字典，格式: "仪表名称 (type: 大分类)"
-        """
-        flattened = {}
-        
-        for category_name, category_info in categories.items():
-            instruments = category_info.get('instruments', {})
-            
-            for instrument_name, instrument_info in instruments.items():
-                # 创建包含类型信息的键名
-                full_name = f"{instrument_name} (type: {category_name})"
-                
-                flattened[full_name] = {
-                    'category': category_name,
-                    'instrument_name': instrument_name,
-                    'frequency': instrument_info.get('frequency', 1),
-                    'description': instrument_info.get('description', ''),
-                    'typical_models': instrument_info.get('typical_models', []),
-                    'main_applications': instrument_info.get('main_applications', []),
-                    'llm_confidence': instrument_info.get('frequency', 0)
-                }
-        
-        return flattened
-    
-    def _display_hierarchical_results(self, categories: Dict):
-        """
-        显示层次化识别结果
-        
-        Args:
-            categories: 层次化的分类结果
-        """
-        print(f"\n🎯 LLM识别的仪表类型（二级分类）:")
-        print("=" * 60)
-        
-        for category_name, category_info in categories.items():
-            instruments = category_info.get('instruments', {})
-            print(f"\n📂 {category_name} ({len(instruments)}种仪表)")
-            print(f"   📝 {category_info.get('description', '')}")
-            
-            for instrument_name, instrument_info in instruments.items():
-                frequency = instrument_info.get('frequency', 0)
-                models = instrument_info.get('typical_models', [])
-                models_str = f" | 型号: {', '.join(models[:2])}" if models else ""
-                print(f"   • {instrument_name} (频次: {frequency}){models_str}")
-        
-        total_instruments = sum(len(cat.get('instruments', {})) for cat in categories.values())
-        print(f"\n📊 总计: {len(categories)}个大分类, {total_instruments}种具体仪表")
-        print("=" * 60)
-    
-    def save_classification_results(self, types_dict: Dict, save_path: str = "./data/llm_instrument_types.json"):
-        """
-        保存LLM识别的仪表类型结果（支持层次化结构）
-        
-        Args:
-            types_dict: 识别结果字典（扁平化格式）
-            save_path: 保存路径
-        """
-        try:
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            
-            # 添加元数据和统计信息
-            categories = set()
-            for instrument_key, instrument_info in types_dict.items():
-                categories.add(instrument_info.get('category', '其他'))
-            
-            result_data = {
-                'instrument_types': types_dict,
-                'metadata': {
-                    'total_types': len(types_dict),
-                    'total_categories': len(categories),
-                    'categories': list(categories),
-                    'generation_time': str(datetime.now()),
-                    'method': 'llm_hierarchical_analysis',
-                    'format_explanation': '仪表名称格式: "具体仪表 (type: 大分类)"'
-                }
-            }
-            
-            with open(save_path, 'w', encoding='utf-8') as f:
-                json.dump(result_data, f, ensure_ascii=False, indent=2)
-            
-            logger.info(f"📁 层次化仪表类型识别结果已保存到: {save_path}")
-            logger.info(f"📊 总计: {len(categories)}个大分类, {len(types_dict)}种具体仪表")
-            
-        except Exception as e:
-            logger.error(f"保存识别结果失败: {str(e)}")
 
 class DocumentIndexer:
     """文档向量索引构建器"""
@@ -352,10 +47,7 @@ class DocumentIndexer:
         self.index = None
         self.documents = []
         self.metadata = []
-        
-        # 添加仪表类型分类器
-        self.instrument_classifier = InstrumentTypeClassifier()
-        
+    
     def _load_model(self):
         """加载嵌入模型"""
         if self.model is None:
@@ -654,22 +346,6 @@ class DocumentIndexer:
             
             # 提取文本内容
             texts = [doc['content'] for doc in documents]
-            
-            # 🤖 新增：LLM智能识别仪表类型
-            logger.info("🤖 启动LLM智能识别仪表类型...")
-            instrument_types = self.instrument_classifier.analyze_documents_with_llm(texts)
-            
-            if instrument_types:
-                # 保存识别结果
-                self.instrument_classifier.save_classification_results(instrument_types)
-                logger.info(f"✅ LLM成功识别了 {len(instrument_types)} 种具体仪表类型")
-                
-                # 显示识别结果
-                print(f"\n🎯 LLM识别的仪表类型:")
-                for instrument, info in instrument_types.items():
-                    print(f"   • {instrument} (类别: {info['category']}, 频次: {info['frequency']})")
-            else:
-                logger.warning("⚠️ 未能识别出仪表类型")
             
             # 生成嵌入向量
             logger.info("开始生成文档嵌入向量...")
