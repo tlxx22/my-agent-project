@@ -109,35 +109,51 @@ LangGraph智能体包含以下节点和工作流：
 
 
 ```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: "#e1f5fe"
+    primaryTextColor: "#01579b" 
+    primaryBorderColor: "#0277bd"
+    lineColor: "#0288d1"
+    secondaryColor: "#f3e5f5"
+    tertiaryColor: "#e8f5e8"
+    background: "#fafafa"
+    fontFamily: "Microsoft YaHei, sans-serif"
+---
 graph TD;
-	__start__(<p>__start__</p>)
-	fetch_user_context(fetch_user_context)
-	llm_task_planner(llm_task_planner)
-	ask_user_confirm_tasks(ask_user_confirm_tasks<hr/><small><em>__interrupt = before</em></small>)
-	task_router(task_router)
-	enter_upload_file(enter_upload_file)
-	error_no_file_or_format(error_no_file_or_format)
-	extract_excel_tables(extract_excel_tables)
-	llm_smart_table_selection(llm_smart_table_selection)
-	clarify_table_choice(clarify_table_choice<hr/><small><em>__interrupt = before</em></small>)
-	parse_instrument_table(parse_instrument_table)
-	classify_instrument_type(classify_instrument_type)
-	ask_user_confirm_type(ask_user_confirm_type<hr/><small><em>__interrupt = before</em></small>)
-	summarize_statistics(summarize_statistics)
-	check_user_intent(check_user_intent)
-	respond_statistics(respond_statistics)
-	match_standard_clause(match_standard_clause)
-	standards_gateway(standards_gateway)
-	respond_stats_with_note(respond_stats_with_note)
-	ask_user_approval(ask_user_approval<hr/><small><em>__interrupt = before</em></small>)
-	spec_sensitive_tools(spec_sensitive_tools)
-	skip_sensitive_and_go_on(skip_sensitive_and_go_on)
-	generate_installation_reco(generate_installation_reco)
-	respond_full_report(respond_full_report)
-	feedback_loop_gateway(feedback_loop_gateway)
-	advance_task_index(advance_task_index)
-	error_handler(error_handler)
-	__end__(<p>__end__</p>)
+	__start__([<p>开始</p>]):::first
+	fetch_user_context(获取上下文)
+	llm_task_planner(任务规划)
+	ask_user_confirm_tasks(确认任务)
+	task_router(任务路由)
+	enter_upload_file(上传文件)
+	error_no_file_or_format(文件错误)
+	extract_excel_tables(提取表格)
+	clarify_table_choice(选择表格<hr/><small><em>__interrupt = before</em></small>)
+	parse_instrument_table(解析数据)
+	classify_instrument_type(智能分类)
+	ask_user_confirm_type(确认分类<hr/><small><em>__interrupt = before</em></small>)
+	summarize_statistics(统计汇总)
+	validate_recommendation_types(类型验证)
+	ask_user_select_type(选择类型<hr/><small><em>__interrupt = before</em></small>)
+	check_user_intent(分析意图)
+	respond_statistics(响应统计)
+	display_existing_statistics(显示统计)
+	match_standard_clause(匹配标准)
+	standards_gateway(标准检查)
+	respond_stats_with_note(响应说明)
+	ask_user_approval(用户授权<hr/><small><em>__interrupt = before</em></small>)
+	spec_sensitive_tools(敏感工具)
+	skip_sensitive_and_go_on(跳过工具)
+	generate_installation_reco(生成推荐)
+	respond_full_report(完整报告)
+	feedback_loop_gateway(反馈循环)
+	advance_task_index(推进任务)
+	error_handler(错误处理)
+	intent_gateway_node(意图网关)
+	__end__([<p>结束</p>]):::last
 	__start__ --> fetch_user_context;
 	advance_task_index -. &nbsp;all_done&nbsp; .-> __end__;
 	advance_task_index -. &nbsp;need_file_processing&nbsp; .-> enter_upload_file;
@@ -146,19 +162,36 @@ graph TD;
 	ask_user_approval -. &nbsp;approved&nbsp; .-> spec_sensitive_tools;
 	ask_user_confirm_tasks --> task_router;
 	ask_user_confirm_type --> classify_instrument_type;
+	ask_user_select_type --> validate_recommendation_types;
 	check_user_intent --> llm_task_planner;
 	clarify_table_choice --> parse_instrument_table;
 	classify_instrument_type -. &nbsp;yes&nbsp; .-> ask_user_confirm_type;
+	classify_instrument_type -. &nbsp;error&nbsp; .-> error_handler;
 	classify_instrument_type -. &nbsp;no&nbsp; .-> summarize_statistics;
+	display_existing_statistics --> feedback_loop_gateway;
 	enter_upload_file -. &nbsp;no&nbsp; .-> error_no_file_or_format;
 	enter_upload_file -. &nbsp;yes&nbsp; .-> extract_excel_tables;
-	extract_excel_tables -. &nbsp;yes&nbsp; .-> clarify_table_choice;
+	error_handler -. &nbsp;terminate&nbsp; .-> __end__;
+	error_handler -. &nbsp;retry_classify&nbsp; .-> classify_instrument_type;
+	error_handler -. &nbsp;retry_file&nbsp; .-> enter_upload_file;
+	error_handler -. &nbsp;retry_extract&nbsp; .-> extract_excel_tables;
+	error_handler -. &nbsp;retry_reco&nbsp; .-> generate_installation_reco;
+	error_handler -. &nbsp;skip&nbsp; .-> intent_gateway_node;
+	error_handler -. &nbsp;retry_match&nbsp; .-> match_standard_clause;
+	error_handler -. &nbsp;retry_parse&nbsp; .-> parse_instrument_table;
+	error_handler -. &nbsp;retry_stats&nbsp; .-> summarize_statistics;
+	error_handler -. &nbsp;retry_fallback&nbsp; .-> task_router;
+	error_no_file_or_format -. &nbsp;error&nbsp; .-> error_handler;
+	extract_excel_tables -. &nbsp;user_select&nbsp; .-> clarify_table_choice;
 	extract_excel_tables -. &nbsp;error&nbsp; .-> error_handler;
-	extract_excel_tables -. &nbsp;no&nbsp; .-> parse_instrument_table;
+	extract_excel_tables -. &nbsp;single&nbsp; .-> parse_instrument_table;
 	feedback_loop_gateway -. &nbsp;finish&nbsp; .-> advance_task_index;
 	feedback_loop_gateway -. &nbsp;modify&nbsp; .-> summarize_statistics;
 	fetch_user_context --> check_user_intent;
-	generate_installation_reco --> respond_full_report;
+	generate_installation_reco -. &nbsp;error&nbsp; .-> error_handler;
+	generate_installation_reco -.-> respond_full_report;
+	intent_gateway_node -. &nbsp;reco&nbsp; .-> match_standard_clause;
+	intent_gateway_node -. &nbsp;stats&nbsp; .-> respond_statistics;
 	llm_task_planner -. &nbsp;yes&nbsp; .-> ask_user_confirm_tasks;
 	llm_task_planner -. &nbsp;no&nbsp; .-> task_router;
 	match_standard_clause -. &nbsp;error&nbsp; .-> error_handler;
@@ -168,21 +201,38 @@ graph TD;
 	respond_full_report --> feedback_loop_gateway;
 	respond_statistics --> feedback_loop_gateway;
 	respond_stats_with_note --> feedback_loop_gateway;
-	skip_sensitive_and_go_on --> generate_installation_reco;
-	spec_sensitive_tools --> generate_installation_reco;
+	skip_sensitive_and_go_on -. &nbsp;error&nbsp; .-> error_handler;
+	skip_sensitive_and_go_on -.-> generate_installation_reco;
+	spec_sensitive_tools -. &nbsp;error&nbsp; .-> error_handler;
+	spec_sensitive_tools -.-> generate_installation_reco;
 	standards_gateway -. &nbsp;yes&nbsp; .-> ask_user_approval;
 	standards_gateway -. &nbsp;no&nbsp; .-> respond_stats_with_note;
-	summarize_statistics -. &nbsp;reco&nbsp; .-> match_standard_clause;
-	summarize_statistics -. &nbsp;stats&nbsp; .-> respond_statistics;
+	summarize_statistics -. &nbsp;error&nbsp; .-> error_handler;
+	summarize_statistics -.-> validate_recommendation_types;
+	task_router -. &nbsp;display_stats&nbsp; .-> display_existing_statistics;
 	task_router -. &nbsp;need_file&nbsp; .-> enter_upload_file;
-	task_router -. &nbsp;direct_processing&nbsp; .-> summarize_statistics;
-	error_handler --> __end__;
-	error_no_file_or_format --> __end__;
+	task_router -. &nbsp;direct_reco&nbsp; .-> match_standard_clause;
+	task_router -. &nbsp;direct_stats&nbsp; .-> summarize_statistics;
+	validate_recommendation_types -. &nbsp;validate&nbsp; .-> ask_user_select_type;
+	validate_recommendation_types -. &nbsp;error&nbsp; .-> error_handler;
+	validate_recommendation_types -. &nbsp;proceed&nbsp; .-> intent_gateway_node;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
 	classDef last fill:#bfb6fc
 
-
+	%% ============== 美化样式（不影响原图结构） ==============
+	classDef startStyle fill:#4caf50,stroke:#2e7d32,stroke-width:3px,color:#fff
+	classDef endStyle fill:#f44336,stroke:#c62828,stroke-width:3px,color:#fff
+	classDef contextStyle fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+	classDef llmStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+	classDef userStyle fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+	classDef routeStyle fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+	classDef fileStyle fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
+	classDef aiStyle fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+	classDef dataStyle fill:#f1f8e9,stroke:#689f38,stroke-width:2px
+	classDef toolStyle fill:#fff8e1,stroke:#ffa000,stroke-width:2px
+	classDef outputStyle fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+	classDef errorStyle fill:#ffebee,stroke:#d32f2f,stroke-width:2px
 ```
 
 ## 🛠️ 核心功能

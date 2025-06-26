@@ -83,9 +83,18 @@ class InstrumentAgentState(TypedDict):
     final_report: str
     user_feedback: str  # "modify" 或 "finish"
     
-    # 错误处理
+    # 错误处理（基础字段）
     has_error: bool
     error_context: str
+    
+    # 错误处理增强（LLM反思功能）
+    error_source_node: str            # 错误来源节点
+    error_reflection: str             # LLM反思内容
+    error_decision: str               # LLM决策：retry/skip/terminate
+    error_retry_count: Dict[str, int] # 每个节点的重试计数
+    max_retries: int                  # 最大重试次数（默认2）
+    retry_target_node: str            # 重试目标节点
+    skip_current_step: bool           # 是否跳过当前步骤
     
     # 循环计数器（防死循环）
     loop_count: int
@@ -385,6 +394,22 @@ def fetch_user_context(state: InstrumentAgentState) -> InstrumentAgentState:
         state["current_task_index"] = 0
     if "task_results" not in state:
         state["task_results"] = []
+    
+    # 初始化错误处理增强字段（新增）
+    if "error_retry_count" not in state:
+        state["error_retry_count"] = {}
+    if "max_retries" not in state:
+        state["max_retries"] = 2
+    if "error_source_node" not in state:
+        state["error_source_node"] = ""
+    if "error_reflection" not in state:
+        state["error_reflection"] = ""
+    if "error_decision" not in state:
+        state["error_decision"] = ""
+    if "retry_target_node" not in state:
+        state["retry_target_node"] = ""
+    if "skip_current_step" not in state:
+        state["skip_current_step"] = False
     
     return state
 
@@ -1526,12 +1551,125 @@ def feedback_loop_gateway(state: InstrumentAgentState) -> InstrumentAgentState:
     
     return state
 
-def error_handler(state: InstrumentAgentState) -> InstrumentAgentState:
-    """错误处理器"""
-    error_msg = state.get("error_context", "未知错误")
-    logger.error(f"处理错误: {error_msg}")
+def enhanced_error_handler(state: InstrumentAgentState) -> InstrumentAgentState:
+    """
+    增强错误处理器 - LLM反思 + 智能决策
+    复用已有工具：create_llm(), show_step()，不破坏现有功能
+    """
+    show_step(state, "AI错误分析与决策")
     
-    state["final_report"] = f"处理过程中发生错误：{error_msg}"
+    error_msg = state.get("error_context", "未知错误")
+    source_node = state.get("error_source_node", "未知节点")
+    
+    # 获取重试计数
+    retry_counts = state.get("error_retry_count", {})
+    current_retries = retry_counts.get(source_node, 0)
+    max_retries = state.get("max_retries", 2)
+    
+    print(f"🤔 AI正在分析错误...")
+    print(f"   错误来源：{source_node}")
+    print(f"   错误信息：{error_msg}")
+    print(f"   重试次数：{current_retries}/{max_retries}")
+    
+    # 复用已有的LLM实例创建函数
+    llm = create_llm()
+    
+    # 构建智能分析提示词
+    reflection_prompt = f"""你是一个智能错误处理助手，正在分析仪表分析智能体的运行错误。
+
+错误详情：
+- 发生节点：{source_node}
+- 错误信息：{error_msg}
+- 已重试次数：{current_retries}
+- 最大重试次数：{max_retries}
+
+当前智能体状态：
+- 文件路径：{state.get('excel_file_path', '未知')}
+- 已解析仪表：{len(state.get('parsed_instruments', []))}
+- 已分类仪表：{len(state.get('classified_instruments', []))}
+- 当前任务：{state.get('current_task_index', 0) + 1}/{len(state.get('planned_tasks', []))}
+
+请分析这个错误并做出决策：
+
+1. 先进行反思分析（用中文，以"嗯，看起来用户遇到了xxx错误，我应该..."的风格）
+2. 然后给出决策：
+   - retry：如果错误可能是临时的，且未超过重试限制
+   - skip：如果错误不影响主流程，可以跳过当前步骤
+   - terminate：如果错误严重，无法继续执行
+
+请以JSON格式回复：
+{{
+    "reflection": "你的反思分析",
+    "decision": "retry/skip/terminate",
+    "reason": "决策原因"
+}}"""
+    
+    try:
+        # 使用已有的LLM功能
+        from langchain_core.messages import HumanMessage
+        response = llm.invoke([HumanMessage(content=reflection_prompt)])
+        
+        import json
+        result = json.loads(response.content)
+        
+        reflection = result.get("reflection", "")
+        decision = result.get("decision", "terminate")
+        reason = result.get("reason", "")
+        
+        print(f"\n💭 AI反思：{reflection}")
+        print(f"🎯 AI决策：{decision} - {reason}")
+        
+        # 保存反思结果到状态
+        state["error_reflection"] = reflection
+        state["error_decision"] = decision
+        
+        # 根据决策执行相应逻辑
+        if decision == "retry" and current_retries < max_retries:
+            # 重试：更新重试计数，清除错误标志，准备重新执行
+            retry_counts[source_node] = current_retries + 1
+            state["error_retry_count"] = retry_counts
+            state["has_error"] = False
+            state["error_context"] = ""
+            
+            print(f"🔄 决定重试第 {current_retries + 1} 次...")
+            
+            # 设置重试目标节点
+            state["retry_target_node"] = source_node
+            return state
+            
+        elif decision == "skip":
+            # 跳过：清除错误标志，继续下一步
+            state["has_error"] = False
+            state["error_context"] = ""
+            
+            print(f"⏭️ 决定跳过当前步骤，继续执行...")
+            
+            # 设置跳过标志，让路由逻辑决定下一步
+            state["skip_current_step"] = True
+            return state
+            
+        else:
+            # 终止：保持错误状态，流程将结束
+            print(f"🛑 决定终止执行...")
+            state["final_report"] = f"""
+=== 智能体执行终止 ===
+
+错误节点：{source_node}
+错误信息：{error_msg}
+
+AI分析：{reflection}
+
+系统建议：{reason}
+"""
+            return state
+            
+    except Exception as e:
+        logger.error(f"LLM错误分析失败: {str(e)}")
+        # 回退到简单处理
+        state["error_reflection"] = f"AI分析失败，但我发现在{source_node}节点出现了错误：{error_msg}"
+        state["error_decision"] = "terminate"
+        state["final_report"] = f"处理过程中发生错误：{error_msg}"
+        
     return state
 
 # ==================== 路由函数 ====================
@@ -1545,6 +1683,22 @@ def table_selection_gateway(state: InstrumentAgentState) -> str:
     # 总是让用户确认表格选择，确保使用正确的数据
     # 这样可以避免自动使用错误的表格
     return "user_select"
+
+def error_recovery_gateway(state: InstrumentAgentState) -> str:
+    """错误恢复网关 - 根据LLM的decision决定路由，彻底告别死连！"""
+    decision = state.get("error_decision", "terminate")
+    
+    print(f"🔀 错误恢复路由: {decision}")
+    
+    if decision == "retry":
+        print("🔄 LLM决策：重试 → 回到任务路由")
+        return "retry"
+    elif decision == "skip": 
+        print("⏭️ LLM决策：跳过 → 继续正常流程")
+        return "skip"
+    else:
+        print("🛑 LLM决策：终止 → 结束执行")
+        return "terminate"
 
 def task_continue_gateway(state: InstrumentAgentState) -> str:
     """任务继续网关 - 判断是否继续下一个任务"""
@@ -1633,6 +1787,81 @@ def type_validation_gateway(state: InstrumentAgentState) -> str:
     """类型验证网关 - 检查推荐类型是否需要验证"""
     return "validate" if state.get("needs_type_selection", False) else "proceed"
 
+def enhanced_error_check_gateway(state: InstrumentAgentState, next_node: str, current_node: str) -> str:
+    """
+    增强错误检查网关 - 支持重试和跳过逻辑
+    复用已有功能，小心地扩展，不破坏现有流程
+    """
+    
+    # 1. 检查是否有重试请求（优先级最高）
+    retry_target = state.get("retry_target_node", "")
+    if retry_target == current_node:
+        print(f"🔄 检测到重试请求，目标节点: {current_node}")
+        state["retry_target_node"] = ""  # 清除重试标志
+        return next_node  # 重新执行当前节点的下一步
+    
+    # 2. 检查是否要跳过当前步骤
+    if state.get("skip_current_step", False):
+        print(f"⏭️ 检测到跳过请求，当前节点: {current_node}")
+        state["skip_current_step"] = False  # 清除跳过标志
+        # 根据当前节点决定跳转逻辑
+        skip_target = get_skip_target_node(current_node, state)
+        print(f"   → 跳转到: {skip_target}")
+        return skip_target
+    
+    # 3. 常规错误检查（保持原有逻辑）
+    if state.get("has_error", False):
+        # 记录错误来源节点，供LLM分析使用
+        state["error_source_node"] = current_node
+        print(f"❌ 检测到错误，来源节点: {current_node}")
+        return "error"
+    
+    # 4. 无错误，正常继续
+    return next_node
+
+def get_skip_target_node(current_node: str, state: InstrumentAgentState) -> str:
+    """
+    根据当前节点决定跳过后的目标节点
+    使用已有的路由逻辑，确保跳过后流程合理
+    """
+    # 基于现有智能体的流程设计跳过路由表
+    skip_routing = {
+        # 文件处理流程的跳过
+        "extract_excel_tables": "parse_instrument_table",      # 跳过表格提取，直接解析  
+        "parse_instrument_table": "classify_instrument_type",  # 跳过解析，直接分类
+        "classify_instrument_type": "summarize_statistics",    # 跳过分类，直接统计
+        
+        # 推荐流程的跳过
+        "match_standard_clause": "respond_stats_with_note",    # 跳过标准匹配，显示统计
+        "generate_installation_reco": "respond_full_report",   # 跳过推荐生成，直接报告
+        
+        # 默认跳过到意图网关，让系统重新选择路径
+    }
+    
+    target_node = skip_routing.get(current_node, "intent_gateway_node")
+    
+    # 如果跳过到intent_gateway_node，确保系统能继续正常流程
+    if target_node == "intent_gateway_node":
+        print(f"   💡 使用智能路由: {current_node} → intent_gateway_node")
+    
+    return target_node
+
+def error_and_confidence_gateway(state: InstrumentAgentState, current_node: str) -> str:
+    """
+    组合错误检查和置信度检查的网关
+    先检查错误，再检查置信度
+    """
+    # 先进行错误检查
+    error_result = enhanced_error_check_gateway(state, "confidence_check", current_node)
+    if error_result == "error":
+        return "error"
+    
+    # 无错误时进行置信度检查
+    if state.get("needs_user_confirmation", False):
+        return "yes"  # 需要用户确认
+    else:
+        return "no"   # 不需要确认，继续下一步
+
 # ==================== 图构建函数 ====================
 
 def create_instrument_agent():
@@ -1699,7 +1928,7 @@ def create_instrument_agent():
     builder.add_node("advance_task_index", advance_task_index)
     
     # 9. 错误处理
-    builder.add_node("error_handler", error_handler)
+    builder.add_node("error_handler", enhanced_error_handler)
     
     # ==================== 设置入口点 ====================
     builder.set_entry_point("fetch_user_context")
@@ -1769,9 +1998,9 @@ def create_instrument_agent():
         "no": "error_no_file_or_format"
     })
     
-    # 表格提取后的多表格网关 - 直接用户选择
+    # 表格提取后的多表格网关 - 使用增强错误检查
     builder.add_conditional_edges("extract_excel_tables",
-        lambda s: error_check_gateway(s, table_selection_gateway(s)),
+        lambda s: enhanced_error_check_gateway(s, table_selection_gateway(s), "extract_excel_tables"),
         {
             "single": "parse_instrument_table",     # 单表格直接解析
             "user_select": "clarify_table_choice",  # 多表格让用户选择
@@ -1781,30 +2010,47 @@ def create_instrument_agent():
     # 用户表格选择后进入解析
     builder.add_edge("clarify_table_choice", "parse_instrument_table")
     
-    # 解析后进入分类（含错误处理）
+    # 解析后进入分类（使用增强错误检查）
     builder.add_conditional_edges("parse_instrument_table",
-        lambda s: error_check_gateway(s, "classify_instrument_type"),
+        lambda s: enhanced_error_check_gateway(s, "classify_instrument_type", "parse_instrument_table"),
         {
             "classify_instrument_type": "classify_instrument_type",
             "error": "error_handler"
         })
     
-    # 置信度网关
-    builder.add_conditional_edges("classify_instrument_type", confidence_gateway, {
+    # 分类后的错误检查和置信度网关（使用增强错误检查）
+    builder.add_conditional_edges("classify_instrument_type", 
+        lambda s: error_and_confidence_gateway(s, "classify_instrument_type"), {
         "yes": "ask_user_confirm_type",
-        "no": "summarize_statistics"
+        "no": "summarize_statistics",
+        "error": "error_handler"
     })
     
     # 置信度回环
     builder.add_edge("ask_user_confirm_type", "classify_instrument_type")
     
-    # 统计后进入类型验证
-    builder.add_edge("summarize_statistics", "validate_recommendation_types")
+    # 统计后进入类型验证（使用增强错误检查）
+    builder.add_conditional_edges("summarize_statistics",
+        lambda s: enhanced_error_check_gateway(s, "validate_recommendation_types", "summarize_statistics"),
+        {
+            "validate_recommendation_types": "validate_recommendation_types",
+            "error": "error_handler"
+        })
     
-    # 类型验证网关
-    builder.add_conditional_edges("validate_recommendation_types", type_validation_gateway, {
+    # 类型验证网关（先检查错误，再检查类型验证）
+    def error_and_type_validation_gateway(state):
+        # 先进行错误检查
+        error_result = enhanced_error_check_gateway(state, "type_check", "validate_recommendation_types")
+        if error_result == "error":
+            return "error"
+        
+        # 无错误时进行类型验证检查
+        return "validate" if state.get("needs_type_selection", False) else "proceed"
+    
+    builder.add_conditional_edges("validate_recommendation_types", error_and_type_validation_gateway, {
         "validate": "ask_user_select_type",  # 需要用户重新选择类型
-        "proceed": "intent_gateway_node"    # 类型有效，继续正常流程
+        "proceed": "intent_gateway_node",    # 类型有效，继续正常流程
+        "error": "error_handler"             # 错误处理
     })
     
     # 用户类型选择后重新验证
@@ -1819,9 +2065,9 @@ def create_instrument_agent():
         "reco": "match_standard_clause"
     })
     
-    # 标准匹配后的错误检查
+    # 标准匹配后的错误检查（使用增强错误检查）
     builder.add_conditional_edges("match_standard_clause",
-        lambda s: error_check_gateway(s, "standards_gateway"),
+        lambda s: enhanced_error_check_gateway(s, "standards_gateway", "match_standard_clause"),
         {
             "standards_gateway": "standards_gateway",
             "error": "error_handler"
@@ -1839,12 +2085,28 @@ def create_instrument_agent():
         "rejected": "skip_sensitive_and_go_on"
     })
     
-    # 工具路径汇聚到推荐生成
-    builder.add_edge("spec_sensitive_tools", "generate_installation_reco")
-    builder.add_edge("skip_sensitive_and_go_on", "generate_installation_reco")
+    # 工具路径汇聚到推荐生成（使用增强错误检查）
+    builder.add_conditional_edges("spec_sensitive_tools",
+        lambda s: enhanced_error_check_gateway(s, "generate_installation_reco", "spec_sensitive_tools"),
+        {
+            "generate_installation_reco": "generate_installation_reco",
+            "error": "error_handler"
+        })
     
-    # 推荐生成后
-    builder.add_edge("generate_installation_reco", "respond_full_report")
+    builder.add_conditional_edges("skip_sensitive_and_go_on",
+        lambda s: enhanced_error_check_gateway(s, "generate_installation_reco", "skip_sensitive_and_go_on"),
+        {
+            "generate_installation_reco": "generate_installation_reco", 
+            "error": "error_handler"
+        })
+    
+    # 推荐生成后（使用增强错误检查）
+    builder.add_conditional_edges("generate_installation_reco",
+        lambda s: enhanced_error_check_gateway(s, "respond_full_report", "generate_installation_reco"),
+        {
+            "respond_full_report": "respond_full_report",
+            "error": "error_handler"
+        })
     
     # 所有响应都进入反馈循环网关
     builder.add_edge("respond_statistics", "feedback_loop_gateway")
@@ -1865,9 +2127,28 @@ def create_instrument_agent():
         "all_done": "__end__"                       # 所有任务完成
     })
     
-    # 错误处理
-    builder.add_edge("error_no_file_or_format", "__end__")
-    builder.add_edge("error_handler", "__end__")
+    # 错误处理 - 告别死连，实现智能路由！
+    # ✅ 修复文件错误死连：让文件错误也经过LLM反思处理
+    builder.add_conditional_edges("error_no_file_or_format", 
+        lambda s: enhanced_error_check_gateway(s, "error_handler", "error_no_file_or_format"),
+        {
+            "error_handler": "error_handler",   # 文件错误 → LLM反思处理
+            "error": "error_handler"            # 保持一致性
+        })
+    
+    # ❌ 删除死连：builder.add_edge("error_handler", "__end__")
+    # ✅ 新增智能条件路由：
+    builder.add_conditional_edges("error_handler", error_recovery_gateway, {
+        "retry": "task_router",             # LLM说重试 → 回到任务路由重新执行
+        "skip": "intent_gateway_node",      # LLM说跳过 → 继续正常流程  
+        "terminate": "__end__"              # LLM说终止 → 才真正结束
+    })
+    
+    # 置信度网关
+    builder.add_conditional_edges("classify_instrument_type", confidence_gateway, {
+        "yes": "ask_user_confirm_type",
+        "no": "summarize_statistics"
+    })
     
     # ==================== 编译图 ====================
     logger.info("编译智能体图...")
