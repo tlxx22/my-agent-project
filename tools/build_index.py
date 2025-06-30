@@ -186,10 +186,7 @@ class DocumentIndexer:
                 return []
             
             # 检查是否是仪表安装规范文档（通过文件名和内容特征判断）
-            is_instrument_standard = (
-                '仪表安装规范' in os.path.basename(file_path) or 
-                '第 1.0.1 条本规范适用于工业自动化仪表' in content[:200]
-            )
+            is_instrument_standard = True
             
             if is_instrument_standard:
                 # 对于仪表安装规范，使用多级标题智能分割

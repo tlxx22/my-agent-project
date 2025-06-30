@@ -17,7 +17,7 @@ LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "instrument_agent")
 LANGCHAIN_ENDPOINT = os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
 
 # 模型配置
-LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
+LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "shibing624/text2vec-base-chinese")
 
 # 向量数据库配置

@@ -131,7 +131,7 @@ class ContentCoverageMetrics:
             # A类优化：缓存文档向量，平均省80% CPU/GPU时延
             if not hasattr(self, '_doc_emb_cache'):
                 self._doc_emb_cache = {}
-                
+            
             if category not in self.semantic_probes:
                 return False
                 

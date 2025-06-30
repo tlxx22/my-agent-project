@@ -107,7 +107,7 @@ def test_standards_matching_error():
         user_feedback="",
         error_reflection="",
         error_decision="",
-        error_retry_count={},
+        error_retry_count={"match_standard_clause": 1},
         max_retries=2,
         retry_target_node="",
         skip_current_step=False,

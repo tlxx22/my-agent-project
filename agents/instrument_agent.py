@@ -1593,10 +1593,10 @@ def enhanced_error_handler(state: InstrumentAgentState) -> InstrumentAgentState:
 
 1. 先进行反思分析（用中文，以"嗯，看起来用户遇到了xxx错误，我应该..."的风格）
 2. 然后给出决策：
-   - retry：如果错误可能是临时的，且未超过重试限制
+   - retry：如果错误可能是临时的，且未超过重试限制,就进行重试
    - skip：如果错误不影响主流程，可以跳过当前步骤
    - terminate：如果错误严重，无法继续执行
-
+注意:如果只是没有仪表匹配到标准,很可能是该仪表比较特殊,不影响主流程.在经过重试排除一些缓存因素后如果仍然存在,则选择跳过skip.
 请以JSON格式回复：
 {{
     "reflection": "你的反思分析",
@@ -1609,8 +1609,34 @@ def enhanced_error_handler(state: InstrumentAgentState) -> InstrumentAgentState:
         from langchain_core.messages import HumanMessage
         response = llm.invoke([HumanMessage(content=reflection_prompt)])
         
-        import json
-        result = json.loads(response.content)
+        # --- 解析LLM返回，兼容markdown代码块/额外注释 ---
+        import json, re
+
+        raw_content = ''
+        try:
+            # langchain>=0.1 返回 AIMessage 对象，content 为 str
+            raw_content = (response.content or "").strip()
+        except AttributeError:
+            # 兜底：直接转字符串
+            raw_content = str(response).strip()
+
+        # 去除markdown ```json ``` 包裹
+        if raw_content.startswith("```"):
+            raw_content = re.sub(r"^```[a-zA-Z]*\n?", "", raw_content)
+            if raw_content.endswith("```"):
+                raw_content = raw_content[:-3]
+            raw_content = raw_content.strip()
+
+        # 尝试直接解析
+        try:
+            result = json.loads(raw_content)
+        except json.JSONDecodeError:
+            # 如果失败，尝试从文本中提取第一个JSON对象
+            json_match = re.search(r"\{[\s\S]*\}", raw_content)
+            if json_match:
+                result = json.loads(json_match.group())
+            else:
+                raise
         
         reflection = result.get("reflection", "")
         decision = result.get("decision", "terminate")
@@ -1685,14 +1711,31 @@ def table_selection_gateway(state: InstrumentAgentState) -> str:
     return "user_select"
 
 def error_recovery_gateway(state: InstrumentAgentState) -> str:
-    """错误恢复网关 - 根据LLM的decision决定路由，彻底告别死连！"""
+    """
+    增强错误恢复网关 - 支持精确重试机制
+    基于新Mermaid图的改进：支持retry_classify, retry_file等精确重试
+    """
     decision = state.get("error_decision", "terminate")
+    source_node = state.get("error_source_node", "")
     
-    print(f"🔀 错误恢复路由: {decision}")
+    print(f"🔀 错误恢复路由: {decision} (来源: {source_node})")
     
     if decision == "retry":
-        print("🔄 LLM决策：重试 → 回到任务路由")
-        return "retry"
+        # 根据错误来源节点决定精确重试目标
+        retry_mapping = {
+            "classify_instrument_type": "retry_classify",
+            "enter_upload_file": "retry_file", 
+            "extract_excel_tables": "retry_extract",
+            "generate_installation_reco": "retry_reco",
+            "match_standard_clause": "retry_match",
+            "parse_instrument_table": "retry_parse",
+            "summarize_statistics": "retry_stats"
+        }
+        
+        precise_retry = retry_mapping.get(source_node, "retry_fallback")
+        print(f"🔄 LLM决策：精确重试 → {precise_retry}")
+        return precise_retry
+        
     elif decision == "skip": 
         print("⏭️ LLM决策：跳过 → 继续正常流程")
         return "skip"
@@ -2115,6 +2158,7 @@ def create_instrument_agent():
     builder.add_edge("respond_full_report", "feedback_loop_gateway")
     
     # 反馈循环条件边
+    
     builder.add_conditional_edges("feedback_loop_gateway", feedback_gateway, {
         "modify": "summarize_statistics",   # 修改：重新进入意图分流（意图已确定）
         "finish": "advance_task_index"      # 完成：推进任务
@@ -2137,9 +2181,19 @@ def create_instrument_agent():
         })
     
     # ❌ 删除死连：builder.add_edge("error_handler", "__end__")
-    # ✅ 新增智能条件路由：
+    # ✅ 新增智能条件路由（基于新Mermaid图的精确重试机制）：
     builder.add_conditional_edges("error_handler", error_recovery_gateway, {
-        "retry": "task_router",             # LLM说重试 → 回到任务路由重新执行
+        # 精确重试路径（新图改进）
+        "retry_classify": "classify_instrument_type",
+        "retry_file": "enter_upload_file", 
+        "retry_extract": "extract_excel_tables",
+        "retry_reco": "generate_installation_reco",
+        "retry_match": "match_standard_clause",
+        "retry_parse": "parse_instrument_table",
+        "retry_stats": "summarize_statistics",
+        "retry_fallback": "task_router",    # 兜底重试 → 回到任务路由
+        
+        # 原有路径
         "skip": "intent_gateway_node",      # LLM说跳过 → 继续正常流程  
         "terminate": "__end__"              # LLM说终止 → 才真正结束
     })
@@ -2173,7 +2227,7 @@ def create_instrument_agent():
 
 def generate_agent_graph_image():
     """
-    生成智能体图片 - 集成到agent中
+    生成智能体图片 - 集成到agent中，应用新图的改进
     """
     try:
         # 确保目录存在
@@ -2191,14 +2245,16 @@ def generate_agent_graph_image():
         with open(output_path, 'wb') as f:
             f.write(image_bytes)
         
-        # 同时保存mermaid代码
-        mermaid_code = graph_data.draw_mermaid()
+        # 生成增强版mermaid代码（包含中文节点名和美化样式）
+        basic_mermaid_code = graph_data.draw_mermaid()
+        enhanced_mermaid_code = enhance_mermaid_graph(basic_mermaid_code)
+        
         mermaid_path = 'graph/instrument_agent.mermaid'
         with open(mermaid_path, 'w', encoding='utf-8') as f:
-            f.write(mermaid_code)
+            f.write(enhanced_mermaid_code)
         
         logger.info(f"图片已生成: {output_path}")
-        logger.info(f"Mermaid代码已保存: {mermaid_path}")
+        logger.info(f"增强版Mermaid代码已保存: {mermaid_path}")
         
         return {
             'success': True,
@@ -2216,6 +2272,123 @@ def generate_agent_graph_image():
             'error': str(e)
         }
 
+def enhance_mermaid_graph(basic_mermaid: str) -> str:
+    """
+    增强Mermaid图 - 应用新图的改进（中文节点名 + 美化样式）
+    """
+    # 节点名中英文映射
+    node_name_mapping = {
+        "fetch_user_context": "获取上下文",
+        "llm_task_planner": "任务规划", 
+        "ask_user_confirm_tasks": "确认任务",
+        "task_router": "任务路由",
+        "enter_upload_file": "上传文件",
+        "error_no_file_or_format": "文件错误",
+        "extract_excel_tables": "提取表格",
+        "clarify_table_choice": "选择表格<hr/><small><em>__interrupt = before</em></small>",
+        "parse_instrument_table": "解析数据",
+        "classify_instrument_type": "智能分类",
+        "ask_user_confirm_type": "确认分类<hr/><small><em>__interrupt = before</em></small>",
+        "summarize_statistics": "统计汇总",
+        "validate_recommendation_types": "类型验证",
+        "ask_user_select_type": "选择类型<hr/><small><em>__interrupt = before</em></small>",
+        "check_user_intent": "分析意图",
+        "respond_statistics": "响应统计",
+        "display_existing_statistics": "显示统计",
+        "match_standard_clause": "匹配标准",
+        "standards_gateway": "标准检查",
+        "respond_stats_with_note": "响应说明",
+        "ask_user_approval": "用户授权<hr/><small><em>__interrupt = before</em></small>",
+        "spec_sensitive_tools": "敏感工具",
+        "skip_sensitive_and_go_on": "跳过工具",
+        "generate_installation_reco": "生成推荐",
+        "respond_full_report": "完整报告",
+        "feedback_loop_gateway": "反馈循环",
+        "advance_task_index": "推进任务",
+        "error_handler": "错误处理",
+        "intent_gateway_node": "意图网关"
+    }
+    
+    # 开始处理
+    enhanced_code = basic_mermaid
+    
+    # 特殊处理开始和结束节点 - 精确匹配目标格式
+    enhanced_code = enhanced_code.replace("__start__([<p>__start__</p>]):::first", "__start__([<p>开始</p>]):::first")
+    enhanced_code = enhanced_code.replace("__end__([<p>__end__</p>]):::last", "__end__([<p>结束</p>]):::last")
+    
+    # 替换普通节点名为中文
+    for eng_name, chinese_name in node_name_mapping.items():
+        enhanced_code = enhanced_code.replace(f"({eng_name})", f"({chinese_name})")
+    
+    # 特殊处理带interrupt的节点 - 更精确的匹配
+    enhanced_code = enhanced_code.replace("clarify_table_choice<hr/><small><em>__interrupt = before</em></small>", "选择表格<hr/><small><em>__interrupt = before</em></small>")
+    enhanced_code = enhanced_code.replace("ask_user_confirm_type<hr/><small><em>__interrupt = before</em></small>", "确认分类<hr/><small><em>__interrupt = before</em></small>")
+    enhanced_code = enhanced_code.replace("ask_user_select_type<hr/><small><em>__interrupt = before</em></small>", "选择类型<hr/><small><em>__interrupt = before</em></small>")
+    enhanced_code = enhanced_code.replace("ask_user_approval<hr/><small><em>__interrupt = before</em></small>", "用户授权<hr/><small><em>__interrupt = before</em></small>")
+    
+    # 添加配置头
+    config_header = """---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: "#e1f5fe"
+    primaryTextColor: "#01579b" 
+    primaryBorderColor: "#0277bd"
+    lineColor: "#0288d1"
+    secondaryColor: "#f3e5f5"
+    tertiaryColor: "#e8f5e8"
+    background: "#fafafa"
+    fontFamily: "Microsoft YaHei, sans-serif"
+---
+"""
+    
+    # 美化样式 - 精确匹配目标格式
+    style_footer = """
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
+
+	%% ============== 美化样式（不影响原图结构） ==============
+	classDef startStyle fill:#4caf50,stroke:#2e7d32,stroke-width:3px,color:#fff
+	classDef endStyle fill:#f44336,stroke:#c62828,stroke-width:3px,color:#fff
+	classDef contextStyle fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+	classDef llmStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+	classDef userStyle fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+	classDef routeStyle fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+	classDef fileStyle fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
+	classDef aiStyle fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+	classDef dataStyle fill:#f1f8e9,stroke:#689f38,stroke-width:2px
+	classDef toolStyle fill:#fff8e1,stroke:#ffa000,stroke-width:2px
+	classDef outputStyle fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+	classDef errorStyle fill:#ffebee,stroke:#d32f2f,stroke-width:2px"""
+    
+    # 清理可能的重复classDef定义
+    lines = enhanced_code.split('\n')
+    seen_classdef = set()
+    cleaned_lines = []
+    
+    for line in lines:
+        line_stripped = line.strip()
+        # 如果是classDef定义且已经见过，跳过
+        if line_stripped.startswith('classDef '):
+            if line_stripped in seen_classdef:
+                continue
+            seen_classdef.add(line_stripped)
+        cleaned_lines.append(line)
+    
+    enhanced_code = '\n'.join(cleaned_lines)
+    
+    # 组装最终代码
+    if enhanced_code.startswith("graph"):
+        enhanced_code = config_header + enhanced_code + style_footer
+    elif "graph TD" in enhanced_code:
+        parts = enhanced_code.split("graph TD", 1)
+        enhanced_code = config_header + "graph TD" + parts[1] + style_footer
+    else:
+        enhanced_code = config_header + enhanced_code + style_footer
+    
+    return enhanced_code
+
 # 创建智能体实例
 instrument_agent = create_instrument_agent()
 
@@ -2225,6 +2398,11 @@ if __name__ == "__main__":
     print("✅ 完全交互式设计，禁止默认参数")
     print("✅ 集成防死循环机制")
     print("✅ 集成图片生成功能")
+    print("✅ 已集成新Mermaid图的所有改进:")
+    print("   🔄 精确错误重试机制（retry_classify, retry_file等）")
+    print("   🏁 增强的直接结束路径")
+    print("   🎨 中文节点名和美化样式")
+    print("   📈 更完整的流程控制")
     
     # 生成图片
     print("\n📊 正在生成智能体图片...")
