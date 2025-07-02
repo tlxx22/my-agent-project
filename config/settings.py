@@ -10,12 +10,6 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
-# LangSmith 追溯配置
-LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "true")
-LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY", "")
-LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "instrument_agent")
-LANGCHAIN_ENDPOINT = os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
-
 # 模型配置
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "shibing624/text2vec-base-chinese")
@@ -42,34 +36,12 @@ INSTRUMENT_TYPE_MAPPING = {
     "LT": "液位变送器"
 }
 
-def setup_langsmith_tracing():
-    """设置LangSmith追溯"""
-    if LANGCHAIN_API_KEY:
-        os.environ["LANGCHAIN_TRACING_V2"] = LANGCHAIN_TRACING_V2
-        os.environ["LANGCHAIN_API_KEY"] = LANGCHAIN_API_KEY
-        os.environ["LANGCHAIN_PROJECT"] = LANGCHAIN_PROJECT
-        os.environ["LANGCHAIN_ENDPOINT"] = LANGCHAIN_ENDPOINT
-        print(f"🔗 LangSmith追溯已启用 - 项目: {LANGCHAIN_PROJECT}")
-        return True
-    else:
-        print("⚠️ LangSmith API Key未配置，跳过追溯设置")
-        return False
-
 def get_openai_config():
     """获取OpenAI配置"""
     return {
         "api_key": OPENAI_API_KEY,
         "base_url": OPENAI_BASE_URL,
         "model": LLM_MODEL
-    }
-
-def get_langsmith_config():
-    """获取LangSmith配置"""
-    return {
-        "tracing_enabled": LANGCHAIN_TRACING_V2.lower() == "true",
-        "api_key": LANGCHAIN_API_KEY,
-        "project": LANGCHAIN_PROJECT,
-        "endpoint": LANGCHAIN_ENDPOINT
     }
 
 def get_settings():
@@ -83,6 +55,5 @@ def get_settings():
         "vector_dimension": VECTOR_DIMENSION,
         "standards_data_path": STANDARDS_DATA_PATH,
         "upload_path": UPLOAD_PATH,
-        "instrument_type_mapping": INSTRUMENT_TYPE_MAPPING,
-        "langsmith_config": get_langsmith_config()
+        "instrument_type_mapping": INSTRUMENT_TYPE_MAPPING
     } 

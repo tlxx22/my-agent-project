@@ -353,7 +353,7 @@ class EnhancedRAGRetriever:
             
             results = self.base_retriever.search_related_clauses(
                 enhanced_query, 
-                top_k=top_k * 2,  # 获取更多候选结果
+                top_k=top_k * 3,  # 🎯 从2倍增加到3倍，获取更多候选结果供重排序
                 min_similarity=0.6  # 降低初始阈值，后续重排序
             )
             
@@ -631,7 +631,7 @@ class EnhancedRAGRetriever:
             logger.error(f"生成 {instrument_type} 综合标准信息失败: {str(e)}")
         
         return result
-    
+
     def basic_retrieve(self, query: str, top_k: int = 5) -> List:
         """基础检索方法（不含重排序优化），用于对比实验"""
         try:

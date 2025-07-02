@@ -72,7 +72,7 @@ class StandardClauseRetriever:
             faiss.normalize_L2(query_embedding)
             
             # 在索引中搜索更多候选结果
-            search_k = min(top_k * 3, 20)  # 搜索更多候选结果进行质量过滤
+            search_k = min(top_k * 4, 30)  # 🎯 从3倍增加到4倍，最大从20增加到30，获取更多候选结果进行质量过滤
             scores, indices = self.indexer.index.search(query_embedding.astype(np.float32), search_k)
             
             results = []

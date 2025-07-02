@@ -1203,7 +1203,7 @@ def match_standard_clause_node(state: InstrumentAgentState) -> InstrumentAgentSt
                 search_results = enhanced_retriever.advanced_search(
                     inst_type, 
                     instrument_type=inst_type, 
-                    top_k=8  # 🎯 从3增加到8，提高召回率，让LLM来筛选
+                    top_k=15  # 🎯 从8增加到15，提供更丰富的候选标准，让LLM来筛选
                 )
                 
                 # 提取内容文本
@@ -1913,12 +1913,7 @@ def create_instrument_agent():
     """
     logger.info("开始构建智能体（在原有架构基础上集成LLM）...")
     
-    # 启用LangSmith追溯
-    try:
-        from config.settings import setup_langsmith_tracing
-        setup_langsmith_tracing()
-    except Exception as e:
-        logger.warning(f"LangSmith追溯设置失败: {e}")
+    # LangSmith追溯已移除
     
     # 创建图构建器
     builder = StateGraph(InstrumentAgentState)

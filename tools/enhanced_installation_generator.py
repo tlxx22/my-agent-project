@@ -100,7 +100,7 @@ class EnhancedInstallationRecommendationGenerator:
         
         return "\n".join(report_parts)
         
-    def _call_llm(self, prompt: str, max_tokens: int = 800) -> str:
+    def _call_llm(self, prompt: str, max_tokens: int = 1200) -> str:
         """
         调用LLM生成内容
         
@@ -302,7 +302,7 @@ class EnhancedInstallationRecommendationGenerator:
 要求：材料规格具体明确，标注关键技术参数，确保与设备型号匹配，符合工程标准。
         """
         
-        material_list = self._call_llm(material_prompt, max_tokens=600)
+        material_list = self._call_llm(material_prompt, max_tokens=700)
         
         # 生成安全要求
         safety_prompt = f"""

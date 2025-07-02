@@ -2293,7 +2293,7 @@ conda activate contest    # 重新激活
 ✅ 包位置: D:\anaconda3\envs\contest\Lib\site-packages  
 ✅ ChatOpenAI导入成功！
 ✅ 增强错误处理器导入成功！
-✅ LangSmith追溯已启用
+✅ 配置加载完成
 ```
 
 ## 💡 **用户操作建议**
@@ -2343,7 +2343,7 @@ conda activate contest    # 重新激活
 ✅ 包位置: D:\anaconda3\envs\contest\Lib\site-packages  
 ✅ ChatOpenAI导入成功！
 ✅ 增强错误处理器导入成功！
-✅ LangSmith追溯已启用
+✅ 配置加载完成
 ```
 
 ```shellscript
