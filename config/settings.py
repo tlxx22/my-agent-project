@@ -22,19 +22,7 @@ VECTOR_DIMENSION = int(os.getenv("VECTOR_DIMENSION", "1536"))
 STANDARDS_DATA_PATH = os.getenv("STANDARDS_DATA_PATH", "./data/standards/")
 UPLOAD_PATH = os.getenv("UPLOAD_PATH", "./data/uploads/")
 
-# 仪表类型映射配置
-INSTRUMENT_TYPE_MAPPING = {
-    "WRN": "热电偶",
-    "WZP": "热电阻", 
-    "WZC": "热电阻",
-    "Y": "压力表",
-    "YX": "电接点压力表",
-    "YE": "膜盒压力表",
-    "PT": "压力变送器",
-    "TT": "温度变送器",
-    "FT": "流量变送器",
-    "LT": "液位变送器"
-}
+
 
 def get_openai_config():
     """获取OpenAI配置"""
@@ -54,6 +42,5 @@ def get_settings():
         "faiss_index_path": FAISS_INDEX_PATH,
         "vector_dimension": VECTOR_DIMENSION,
         "standards_data_path": STANDARDS_DATA_PATH,
-        "upload_path": UPLOAD_PATH,
-        "instrument_type_mapping": INSTRUMENT_TYPE_MAPPING
+        "upload_path": UPLOAD_PATH
     } 

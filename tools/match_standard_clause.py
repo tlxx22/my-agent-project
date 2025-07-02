@@ -48,14 +48,14 @@ class StandardClauseRetriever:
         self.is_loaded = success
         return success
     
-    def search_related_clauses(self, query: str, top_k: int = 5, min_similarity: float = 0.6) -> List[Dict]:
+    def search_related_clauses(self, query: str, top_k: int = 5, min_similarity: float = 0.5) -> List[Dict]:
         """
         搜索与查询相关的规范条款
         
         Args:
             query: 查询字符串
             top_k: 返回最相关的k个结果
-            min_similarity: 最小相似度阈值(提高到0.6)
+            min_similarity: 最小相似度阈值(降低到0.5以提高召回率)
         
         Returns:
             相关条款列表，每个条款包含content, score, metadata
@@ -210,8 +210,8 @@ class StandardClauseRetriever:
         seen_contents = set()  # 避免重复结果
         
         for query in queries:
-            # 每个查询最多取2个结果，提高精度
-            results = self.search_related_clauses(query, top_k=2, min_similarity=0.6)
+            # 每个查询最多取2个结果，提高精度  
+            results = self.search_related_clauses(query, top_k=2, min_similarity=0.5)
             
             for result in results:
                 content = result['content']

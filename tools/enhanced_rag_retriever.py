@@ -354,7 +354,7 @@ class EnhancedRAGRetriever:
             results = self.base_retriever.search_related_clauses(
                 enhanced_query, 
                 top_k=top_k * 3,  # 🎯 从2倍增加到3倍，获取更多候选结果供重排序
-                min_similarity=0.6  # 降低初始阈值，后续重排序
+                min_similarity=0.5  # 🎯 降低阈值到0.5，提高召回率，后续重排序会筛选质量
             )
             
             for result in results:

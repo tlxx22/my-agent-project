@@ -204,6 +204,7 @@ class DocumentIndexer:
                     (r'\d+、', '二级标题'),                     # 1、2、等
                     (r'\d+,', '二级标题'),                     # 1,2,等
                     (r'\(\d+\)', '三级标题'),                   # (1) (2) 等
+                    (r'[一二三四五六七八九十]{1,2}\)、', '三级标题'), # 一)、二)、等（修复：包含顿号）
                     (r'[一二三四五六七八九十]{1,2}\)', '三级标题'), # 一) 二) 等
                     (r'[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]', '四级标题'), # ① ② 等
                 ]
@@ -247,11 +248,12 @@ class DocumentIndexer:
                         section_content = content[content_start:content_end].strip()
                         
                         if section_content:
-                            # 组合完整段落
-                            full_section = f"[{split_info['level']}] {split_info['title']} {section_content}"
+                            # 🎯 智能清理：移除段落末尾混入的章节标题
+                            section_content = self._clean_section_content(section_content, all_splits[i+1:] if i + 1 < len(all_splits) else [])
                             
-                            # 过滤掉太短的段落
-                            if len(section_content) > 20:
+                            # 组合完整段落（只有当内容足够长且有实质内容时）
+                            if len(section_content) > 20 and self._has_substantial_content(section_content):
+                                full_section = f"[{split_info['level']}] {split_info['title']} {section_content}"
                                 text_chunks.append(full_section)
                     
                     logger.info(f"✅ 多级标题分割完成，提取了 {len(text_chunks)} 个结构化段落")
@@ -281,6 +283,79 @@ class DocumentIndexer:
         except Exception as e:
             logger.error(f"读取文本文件失败: {str(e)}")
             return []
+    
+    def _clean_section_content(self, content: str, next_splits: List[Dict]) -> str:
+        """
+        清理段落内容，移除意外混入的章节标题
+        
+        Args:
+            content: 原始段落内容
+            next_splits: 后续的章节分割点信息
+        
+        Returns:
+            清理后的内容
+        """
+        import re
+        
+        if not next_splits:
+            return content
+        
+        # 获取下一个章节的标题
+        next_title = next_splits[0]['title'].strip()
+        
+        # 如果段落末尾包含下一个章节标题，则移除它
+        if next_title in content:
+            # 找到章节标题在内容中的位置
+            title_pos = content.rfind(next_title)
+            if title_pos > len(content) * 0.7:  # 只有当标题出现在段落后70%时才认为是混入的
+                content = content[:title_pos].strip()
+        
+        # 移除可能混入的其他章节标题模式
+        cleanup_patterns = [
+            r'第\s*[一二三四五六七八九十\d]+\s*[章节条部分]{1}[^\n]*$',  # 末尾的章节标题
+            r'第\s*\d+\.\d+\s*条[^\n]*$',                          # 末尾的条款标题
+            r'[一二三四五六七八九十]{1,2}[、．.]\s*[^\n]*$',          # 末尾的编号标题
+        ]
+        
+        for pattern in cleanup_patterns:
+            content = re.sub(pattern, '', content, flags=re.MULTILINE).strip()
+        
+        return content
+    
+    def _has_substantial_content(self, content: str) -> bool:
+        """
+        判断内容是否有实质性内容（不只是标题或编号）
+        
+        Args:
+            content: 待检查的内容
+        
+        Returns:
+            是否有实质性内容
+        """
+        import re
+        
+        # 移除标题标记和编号
+        cleaned = re.sub(r'^\[.*?\]\s*', '', content)  # 移除[级别标题]标记
+        cleaned = re.sub(r'^[一二三四五六七八九十\d+]+[、．.\s]*', '', cleaned)  # 移除开头编号
+        cleaned = re.sub(r'^第\s*\d+.*?条\s*', '', cleaned)  # 移除条款号
+        
+        # 检查剩余内容
+        cleaned = cleaned.strip()
+        
+        # 如果清理后内容太短或只包含标点符号，认为没有实质内容
+        if len(cleaned) < 15:
+            return False
+        
+        # 检查是否包含实质性的技术术语或描述
+        substantial_indicators = [
+            '安装', '要求', '应', '宜', '不应', '禁止', '必须', '可以',
+            '温度', '压力', '流量', '液位', '仪表', '设备', '管道',
+            '材料', '规格', '标准', '规范', '技术', '工艺', '操作',
+            '检查', '维护', '校准', '测量', '连接', '固定', '保护'
+        ]
+        
+        # 如果包含至少一个技术指示词，认为有实质内容
+        return any(indicator in cleaned for indicator in substantial_indicators)
     
     def process_documents(self, file_paths: List[str]) -> List[Dict]:
         """

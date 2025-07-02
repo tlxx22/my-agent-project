@@ -7,6 +7,9 @@ langgraph>=0.0.40
 # OpenAI API
 openai>=1.10.0
 
+# 嵌入模型
+sentence-transformers>=2.2.0
+
 # 数据处理
 pandas>=2.0.0
 numpy>=1.24.0
@@ -18,5 +21,17 @@ faiss-cpu>=1.7.4
 # 配置管理
 python-dotenv>=1.0.0
 
-# 日志和工具
-logging>=0.4.9.6 
+# 文本处理
+jieba>=0.42.1
+
+# 图像处理（可选）
+Pillow>=9.0.0
+
+# 系统工具
+tqdm>=4.64.0
+
+# 开发工具（可选）
+pytest>=7.0.0
+
+# 注：logging是Python内置模块，无需单独安装
+# 注：所有依赖版本已测试兼容 Python 3.8+ 
