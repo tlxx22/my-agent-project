@@ -1,0 +1,184 @@
+{
+  "evaluation_time": "20250701_211903",
+  "total_documents": 15,
+  "quality_distribution": {
+    "高质量": 5,
+    "中质量": 5,
+    "低质量": 5
+  },
+  "evaluation_results": [
+    {
+      "doc_index": 1,
+      "expected_quality": "高质量",
+      "comprehensive_score": 78.05375,
+      "comprehensive_level": "中等",
+      "coverage_score": 60.96875,
+      "usability_score": 74.8,
+      "quality_score": 92.0,
+      "content_preview": "【高质量】热电偶安装与安全分析\n\n安装位置选择\n热电偶安装位置的选择直接影响测温精度和运行安全。选取测点时需兼顾温度代表性、安全性和维护便利性，应考虑以下方面：\n- 代表性：选择能反映被测介质真实温度..."
+    },
+    {
+      "doc_index": 2,
+      "expected_quality": "高质量",
+      "comprehensive_score": 82.11791666666667,
+      "comprehensive_level": "良好",
+      "coverage_score": 61.40625,
+      "usability_score": 82.6,
+      "quality_score": 93.33333333333334,
+      "content_preview": "【高质量】压力变送器安装与安全分析\n\n安装位置选择\n压力变送器应安装在既能准确反映被测压力又利于安全维护的位置。选择安装点时需满足以下要求：\n- 压力代表性：应在被测容器或管道压力稳定、具有代表性的部..."
+    },
+    {
+      "doc_index": 3,
+      "expected_quality": "高质量",
+      "comprehensive_score": 76.49875,
+      "comprehensive_level": "中等",
+      "coverage_score": 60.84375,
+      "usability_score": 78.4,
+      "quality_score": 83.0,
+      "content_preview": "【高质量】电磁流量计安装与安全分析\n\n安装位置选择\n电磁流量计对直管段和流体工况有一定要求，合理选择安装位置可确保测量准确可靠：\n- 直管段要求：电磁流量计应安装在上下游有足够直管段的位置。通常上游直..."
+    },
+    {
+      "doc_index": 4,
+      "expected_quality": "高质量",
+      "comprehensive_score": 80.53375,
+      "comprehensive_level": "良好",
+      "coverage_score": 61.21875,
+      "usability_score": 80.2,
+      "quality_score": 92.0,
+      "content_preview": "【高质量】雷达液位计安装与安全分析\n\n安装位置选择\n雷达液位计的安装位置对测量效果至关重要，应根据容器结构和介质特性选择最佳位置：\n- 避开障碍：雷达天线的发射波束应尽可能避开罐内障碍物（如搅拌器、扶..."
+    },
+    {
+      "doc_index": 5,
+      "expected_quality": "高质量",
+      "comprehensive_score": 78.24208333333334,
+      "comprehensive_level": "中等",
+      "coverage_score": 60.84375,
+      "usability_score": 73.19999999999999,
+      "quality_score": 94.66666666666667,
+      "content_preview": "【高质量】调节阀安装与安全分析\n\n安装位置选择\n调节阀（控制阀）通常安装在工艺管线需要调节流量或压力的关键位置。选择安装位置时应确保阀门运行稳定、便于操作维护且安全：\n- 直管段要求：为了避免阀门前后..."
+    },
+    {
+      "doc_index": 6,
+      "expected_quality": "中质量",
+      "comprehensive_score": 72.01625,
+      "comprehensive_level": "中等",
+      "coverage_score": 60.03125,
+      "usability_score": 68.80000000000001,
+      "quality_score": 83.0,
+      "content_preview": "【中质量】热电阻安装与安全分析\n\n安装位置选择\n热电阻（测温电阻体）的安装位置要能真实反映被测温度且便于施工：通常选择在设备或管道中温度场均匀的位置，避免靠近热源或冷源过近。测温元件应充分接触介质，可..."
+    },
+    {
+      "doc_index": 7,
+      "expected_quality": "中质量",
+      "comprehensive_score": 69.975,
+      "comprehensive_level": "及格",
+      "coverage_score": 60.625,
+      "usability_score": 64.0,
+      "quality_score": 83.0,
+      "content_preview": "【中质量】压力表安装与安全分析\n\n安装位置选择\n压力表需安装在便于读取且能准确反映压力的位置。通常在设备或管道压力接口处加装球阀后连接压力表，以便检修时关闭。应选择振动小、温度适中的地方，避免阳光直射..."
+    },
+    {
+      "doc_index": 8,
+      "expected_quality": "中质量",
+      "comprehensive_score": 77.02250000000001,
+      "comprehensive_level": "中等",
+      "coverage_score": 60.3125,
+      "usability_score": 79.80000000000001,
+      "quality_score": 83.0,
+      "content_preview": "【中质量】涡街流量计安装与安全分析\n\n安装位置选择\n涡街流量计对直管段要求较高，安装位置应保证上游有15D、下游5D以上直管长度（D为管径），以形成稳定的流速剖面。流量计宜垂直或水平安装在管道上，若水..."
+    },
+    {
+      "doc_index": 9,
+      "expected_quality": "中质量",
+      "comprehensive_score": 68.9075,
+      "comprehensive_level": "及格",
+      "coverage_score": 60.6875,
+      "usability_score": 61.6,
+      "quality_score": 83.0,
+      "content_preview": "【中质量】磁翻板液位计安装与安全分析\n\n安装位置选择\n磁翻板液位计（磁浮子液位计）通常侧装在容器外壁，通过连通管反映容器内液位。安装位置应选择在容器液位变化明显且无障碍处，液位计上下法兰与容器上的接口..."
+    },
+    {
+      "doc_index": 10,
+      "expected_quality": "中质量",
+      "comprehensive_score": 71.6575,
+      "comprehensive_level": "中等",
+      "coverage_score": 60.9375,
+      "usability_score": 67.6,
+      "quality_score": 83.0,
+      "content_preview": "【中质量】可燃气体检测仪安装与安全分析\n\n安装位置选择\n可燃气体检测仪应安装在最可能先接触泄漏可燃气体的地点。根据被检测气体的密度决定探头安装高度：如检测比空气轻的气体（如甲烷），探头安装在空间上部接..."
+    },
+    {
+      "doc_index": 11,
+      "expected_quality": "低质量",
+      "comprehensive_score": 57.35374999999999,
+      "comprehensive_level": "不合格",
+      "coverage_score": 59.21875,
+      "usability_score": 49.8,
+      "quality_score": 66.0,
+      "content_preview": "【低质量】差压变送器安装与安全分析\n安装位置：差压变送器的摆放要考虑到测量准确。一般装在工艺管线旁边的支架上，高度跟取压口差不多。不能放太高或太低，以免影响读数。此外周围环境不能太热或者有强电磁干扰，..."
+    },
+    {
+      "doc_index": 12,
+      "expected_quality": "低质量",
+      "comprehensive_score": 47.02375,
+      "comprehensive_level": "不合格",
+      "coverage_score": 48.96875,
+      "usability_score": 31.400000000000002,
+      "quality_score": 66.0,
+      "content_preview": "【低质量】pH计安装与安全分析\n安装位置选择：pH计探头通常插在池子或管道里面，位置嘛尽量让探头能碰到流水而不是死水区。不要靠太近进水口，以免水流冲击读数不稳。要是池子很大，就放在中间深一点的地方测平..."
+    },
+    {
+      "doc_index": 13,
+      "expected_quality": "低质量",
+      "comprehensive_score": 55.265,
+      "comprehensive_level": "不合格",
+      "coverage_score": 59.125,
+      "usability_score": 45.2,
+      "quality_score": 66.0,
+      "content_preview": "【低质量】电磁阀安装与安全分析\n安装位置：电磁阀一般装在管道上要控制通断的地方。位置没特别讲究，只要进出管对上就行，但最好装在水平管段，线圈朝上，方便维护。周围要留点空间，以后换阀芯或者线圈方便够到。..."
+    },
+    {
+      "doc_index": 14,
+      "expected_quality": "低质量",
+      "comprehensive_score": 48.999583333333334,
+      "comprehensive_level": "不合格",
+      "coverage_score": 51.03125,
+      "usability_score": 32.8,
+      "quality_score": 68.66666666666667,
+      "content_preview": "【低质量】安全阀安装与安全分析\n安装位置：安全阀通常装在锅炉、压力容器或者管道的最高点出口处，直接对外排放。有的还有接排放管，一般也是直通大气。安装的时候要保证阀门垂直朝上，周围留出足够空间，不要有人..."
+    },
+    {
+      "doc_index": 15,
+      "expected_quality": "低质量",
+      "comprehensive_score": 46.22791666666667,
+      "comprehensive_level": "不合格",
+      "coverage_score": 49.15625,
+      "usability_score": 25.400000000000002,
+      "quality_score": 71.33333333333333,
+      "content_preview": "【低质量】压力开关安装与安全分析\n安装位置：压力开关安装跟压力表差不多，多半也是拧在管道或容器取压口上。位置要选在压力能代表真实值的地方，别装在有涡流的角落。通常装在主干管道上便于及时感应到压力变化。..."
+    }
+  ],
+  "quality_level_stats": {
+    "高质量": {
+      "count": 5,
+      "avg_comprehensive": 79.08924999999999,
+      "avg_coverage": 61.05625,
+      "avg_usability": 77.84,
+      "avg_quality": 91.00000000000001
+    },
+    "中质量": {
+      "count": 5,
+      "avg_comprehensive": 71.91575,
+      "avg_coverage": 60.51875,
+      "avg_usability": 68.36000000000001,
+      "avg_quality": 83.0
+    },
+    "低质量": {
+      "count": 5,
+      "avg_comprehensive": 50.974000000000004,
+      "avg_coverage": 53.5,
+      "avg_usability": 36.92,
+      "avg_quality": 67.6
+    }
+  }
+}

@@ -354,7 +354,7 @@ class EnhancedRAGRetriever:
             results = self.base_retriever.search_related_clauses(
                 enhanced_query, 
                 top_k=top_k * 2,  # 获取更多候选结果
-                min_similarity=0.4  # 降低初始阈值，后续重排序
+                min_similarity=0.6  # 降低初始阈值，后续重排序
             )
             
             for result in results:
@@ -631,6 +631,75 @@ class EnhancedRAGRetriever:
             logger.error(f"生成 {instrument_type} 综合标准信息失败: {str(e)}")
         
         return result
+    
+    def basic_retrieve(self, query: str, top_k: int = 5) -> List:
+        """基础检索方法（不含重排序优化），用于对比实验"""
+        try:
+            # 使用基础检索器进行简单的相似度检索
+            results = self.base_retriever.search_related_clauses(
+                query, 
+                top_k=top_k,
+                min_similarity=0.5
+            )
+            
+            # 转换为Document格式以保持接口一致性
+            from langchain.schema import Document
+            documents = []
+            for result in results:
+                doc = Document(
+                    page_content=result['content'],
+                    metadata={
+                        'score': result['score'],
+                        'source': result.get('source', 'unknown'),
+                        'section': result.get('section', '')
+                    }
+                )
+                documents.append(doc)
+            
+            return documents
+            
+        except Exception as e:
+            logger.error(f"基础检索失败: {e}")
+            return []
+    
+    def enhanced_retrieve(self, query: str, top_k: int = 5) -> Dict:
+        """增强检索方法（包含重排序优化）"""
+        try:
+            # 使用高级搜索（包含查询扩展和重排序）
+            results = self.advanced_search(query, top_k=top_k)
+            
+            # 转换为统一格式
+            documents = []
+            for result in results:
+                doc_info = {
+                    'content': result['content'],
+                    'score': result.get('rerank_score', result['score']),
+                    'metadata': {
+                        'original_score': result.get('original_score', result['score']),
+                        'rerank_score': result.get('rerank_score', result['score']),
+                        'source_query': result.get('source_query', query),
+                        'source': result.get('source', 'unknown'),
+                        'section': result.get('section', '')
+                    }
+                }
+                documents.append(doc_info)
+            
+            return {
+                'documents': documents,
+                'query': query,
+                'total_results': len(documents),
+                'enhanced': True
+            }
+            
+        except Exception as e:
+            logger.error(f"增强检索失败: {e}")
+            return {
+                'documents': [],
+                'query': query,
+                'total_results': 0,
+                'enhanced': False,
+                'error': str(e)
+            }
 
 def test_enhanced_retriever():
     """测试增强检索器"""

@@ -1,0 +1,543 @@
+{
+  "total_models": 11,
+  "total_instances": 72,
+  "total_quantity": 246,
+  "model_level_accuracy": 0.9090909090909091,
+  "instance_level_accuracy": 0.9305555555555556,
+  "quantity_weighted_accuracy": 0.959349593495935,
+  "correct_models": 10,
+  "correct_instances": 67,
+  "correct_quantity": 236,
+  "original_distribution": {
+    "温度仪表": 36,
+    "压力仪表": 25,
+    "流量仪表": 5,
+    "调节阀门": 5,
+    "分析仪表": 1
+  },
+  "llm_distribution": {
+    "温度仪表": 36,
+    "压力仪表": 30,
+    "调节阀门": 5,
+    "分析仪表": 1
+  },
+  "original_quantity_distribution": {
+    "分析仪表": 4,
+    "压力仪表": 118,
+    "流量仪表": 10,
+    "温度仪表": 102,
+    "调节阀门": 12
+  },
+  "llm_quantity_distribution": {
+    "分析仪表": 4,
+    "压力仪表": 128,
+    "温度仪表": 102,
+    "调节阀门": 12
+  },
+  "detailed_data": [
+    {
+      "位号": "TE201",
+      "型号": "WZP-430",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE202",
+      "型号": "WZP-430",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE203",
+      "型号": "WZP-430",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE204",
+      "型号": "WZP-430",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE205",
+      "型号": "WRN-430",
+      "数量": 4,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE207",
+      "型号": "WRN-430",
+      "数量": 4,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE209",
+      "型号": "WRN-430",
+      "数量": 4,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE211",
+      "型号": "WRN-430",
+      "数量": 4,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE213",
+      "型号": "WRN-430",
+      "数量": 4,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE215",
+      "型号": "WZP-221",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE216",
+      "型号": "WRN-430",
+      "数量": 4,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE218",
+      "型号": "WRN-430",
+      "数量": 4,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE222",
+      "型号": "WRN-430",
+      "数量": 4,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE224",
+      "型号": "WRN-430",
+      "数量": 4,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE226",
+      "型号": "WRN-430",
+      "数量": 4,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE228",
+      "型号": "WRN-430",
+      "数量": 4,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE230",
+      "型号": "WRN-430",
+      "数量": 4,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE232",
+      "型号": "WRN-430",
+      "数量": 4,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE234",
+      "型号": "WZP-430",
+      "数量": 4,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE237",
+      "型号": "WRN-430",
+      "数量": 4,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE239",
+      "型号": "Pt100",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE240",
+      "型号": "Pt100",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE241",
+      "型号": "Pt100",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE242",
+      "型号": "Pt100",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE243",
+      "型号": "Pt100",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE244",
+      "型号": "Pt100",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE245",
+      "型号": "Pt100",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TE246",
+      "型号": "Pt100",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TI201",
+      "型号": "WSS",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TI202",
+      "型号": "WSS",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TI203",
+      "型号": "WSS",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TI204",
+      "型号": "WSS",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TI205",
+      "型号": "WSS",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TI206",
+      "型号": "WSS",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TI207",
+      "型号": "WSS",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "TI208",
+      "型号": "WSS",
+      "数量": 2,
+      "normalized_original": "温度仪表",
+      "normalized_llm": "温度仪表"
+    },
+    {
+      "位号": "PT201",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 2,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT202",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 2,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT203",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 2,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT204",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 2,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT209",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 4,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT211",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 2,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT212",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 6,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT213",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 8,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT215",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 8,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT217",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 8,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT219",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 8,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT221",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 8,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT223",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 8,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT225",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 4,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT227",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 2,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT228",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 8,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT230",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 4,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT231",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 4,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PdT201",
+      "型号": "EJA120A-EES4A-62NC",
+      "数量": 4,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT232",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 2,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT233",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 2,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT234",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 8,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT235",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 2,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT236",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 2,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "PT237",
+      "型号": "EJA430A-EMS4A-62DC",
+      "数量": 8,
+      "normalized_original": "压力仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "FT201",
+      "型号": "EJA110A-EES4A-62NC",
+      "数量": 2,
+      "normalized_original": "流量仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "FT202",
+      "型号": "EJA110A-EES4A-62NC",
+      "数量": 2,
+      "normalized_original": "流量仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "FT203",
+      "型号": "EJA110A-EES4A-62NC",
+      "数量": 2,
+      "normalized_original": "流量仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "FT204",
+      "型号": "EJA110A-EES4A-62NC",
+      "数量": 2,
+      "normalized_original": "流量仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "FT205",
+      "型号": "EJA110A-EES4A-62NC",
+      "数量": 2,
+      "normalized_original": "流量仪表",
+      "normalized_llm": "压力仪表"
+    },
+    {
+      "位号": "CV203",
+      "型号": "300SS",
+      "数量": 2,
+      "normalized_original": "调节阀门",
+      "normalized_llm": "调节阀门"
+    },
+    {
+      "位号": "CV209",
+      "型号": "300SS",
+      "数量": 2,
+      "normalized_original": "调节阀门",
+      "normalized_llm": "调节阀门"
+    },
+    {
+      "位号": "CV201",
+      "型号": "DKJ-D",
+      "数量": 2,
+      "normalized_original": "调节阀门",
+      "normalized_llm": "调节阀门"
+    },
+    {
+      "位号": "CV202",
+      "型号": "DKJ-D",
+      "数量": 2,
+      "normalized_original": "调节阀门",
+      "normalized_llm": "调节阀门"
+    },
+    {
+      "位号": "CV210",
+      "型号": "DKJ-D",
+      "数量": 4,
+      "normalized_original": "调节阀门",
+      "normalized_llm": "调节阀门"
+    },
+    {
+      "位号": "AT201",
+      "型号": "YFC-1T",
+      "数量": 4,
+      "normalized_original": "分析仪表",
+      "normalized_llm": "分析仪表"
+    }
+  ]
+}

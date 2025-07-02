@@ -305,6 +305,11 @@ def interactive_experience():
                 print(f"   仪表类型: {len(type_distribution)} 种")
                 print(f"   不同型号: {stats.get('不同型号数', '未知')} 种")
                 
+                # 显示只有位号无型号的统计
+                no_model_count = stats.get('只有位号无型号', 0)
+                if no_model_count > 0:
+                    print(f"   只有位号无型号: {no_model_count} 台")
+                
                 if type_distribution:
                     print("   类型分布:")
                     # 按数量排序显示
